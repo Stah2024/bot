@@ -4,7 +4,12 @@ from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
 from aiogram import types
 import os
+
 from handlers.start import get_main_keyboard
+from handlers.settings import (
+    connect_callback, get_tg_token, get_vk_token,
+    ConnectStates
+)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -16,13 +21,18 @@ if not BOT_TOKEN:
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# ← ЭТОТ ХЕНДЛЕР ДОЛЖЕН БЫТЬ!
+# Хендлер команды /start
 @dp.message(Command("start"))
 async def start(message: types.Message):
     await message.answer(
         "Привет! Я репост-бот TG → VK\nВыбери действие:",
         reply_markup=get_main_keyboard()
     )
+
+# Регистрация хендлеров из settings
+dp.callback_query.register(connect_callback, lambda c: c.data == "connect")
+dp.message.register(get_tg_token, ConnectStates.waiting_tg_token)
+dp.message.register(get_vk_token, ConnectStates.waiting_vk_token)
 
 async def main():
     print("Bot started...")
