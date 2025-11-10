@@ -1,10 +1,10 @@
-from aiogram import types
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 def get_main_keyboard():
-    kb = types.InlineKeyboardMarkup(row_width=1)
-    kb.add(
-        types.InlineKeyboardButton("Подключить", callback_data="connect"),
-        types.InlineKeyboardButton("Оплатить", callback_data="pay"),
-        types.InlineKeyboardButton("Инструкция", callback_data="help")
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Подключить", callback_data="connect")],
+            [InlineKeyboardButton(text="Оплатить", callback_data="pay")],
+            [InlineKeyboardButton(text="Инструкция", callback_data="help")]
+        ]
     )
-    return kb
