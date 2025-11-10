@@ -1,5 +1,27 @@
-user_db = {}
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from db.models import Base, UserConnection
 
-def save_user_tokens(user_id, tg_token, vk_token):
-    user_db[user_id] = {"tg_token": tg_token, "vk_token": vk_token}
-    print(f"Сохранено для {user_id}")
+engine = create_engine("sqlite:///bot.db")
+SessionLocal = sessionmaker(bind=engine)
+
+def init_db():
+    Base.metadata.create_all(bind=engine)
+
+def save_user_tokens(user_id, tg_token, vk_token, group_id):
+    session = SessionLocal()
+    existing = session.query(UserConnection).filter_by(telegram_id=user_id).first()
+    if existing:
+        existing.tg_token = tg_token
+        existing.vk_token = vk_token
+        existing.vk_group_id = group_id
+    else:
+        new_user = UserConnection(
+            telegram_id=user_id,
+            tg_token=tg_token,
+            vk_token=vk_token,
+            vk_group_id=group_id
+        )
+        session.add(new_user)
+    session.commit()
+    session.close()
