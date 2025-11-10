@@ -16,6 +16,7 @@ if not BOT_TOKEN:
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
+# ← ЭТОТ ХЕНДЛЕР ДОЛЖЕН БЫТЬ!
 @dp.message(Command("start"))
 async def start(message: types.Message):
     await message.answer(
