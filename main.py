@@ -1,7 +1,8 @@
 import logging
 import asyncio
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
+from aiogram import types
 import os
 from handlers.start import get_main_keyboard
 
