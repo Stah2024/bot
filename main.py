@@ -1,6 +1,7 @@
 import logging
-from aiogram import Bot, Dispatcher, types, executor
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
+import asyncio
+from aiogram import Bot, Dispatcher, types
+from aiogram.filters import Command
 import os
 
 logging.basicConfig(level=logging.INFO)
@@ -11,16 +12,19 @@ if not BOT_TOKEN:
     exit(1)
 
 bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher(bot, storage=MemoryStorage())
+dp = Dispatcher()
 
-@dp.message_handler(commands=['start'])
+@dp.message(Command("start"))
 async def start(message: types.Message):
     await message.answer("Бот жив! Тест через GitHub Actions.\nНапиши /test")
 
-@dp.message_handler(commands=['test'])
+@dp.message(Command("test"))
 async def test(message: types.Message):
-    await message.answer("Работает! 🚀")
+    await message.answer("Работает! Version 3.x")
 
-if name == "main":
-    print("Bot started...")
-    executor.start_polling(dp, skip_updates=True)
+async def main():
+    print("Bot started in GitHub Actions...")
+    await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
