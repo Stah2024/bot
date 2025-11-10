@@ -3,6 +3,7 @@ import asyncio
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 import os
+from handlers.start import get_main_keyboard
 
 logging.basicConfig(level=logging.INFO)
 
@@ -16,14 +17,13 @@ dp = Dispatcher()
 
 @dp.message(Command("start"))
 async def start(message: types.Message):
-    await message.answer("Бот жив! Тест через GitHub Actions.\nНапиши /test")
-
-@dp.message(Command("test"))
-async def test(message: types.Message):
-    await message.answer("Работает! Version 3.x")
+    await message.answer(
+        "Привет! Я репост-бот TG → VK\nВыбери действие:",
+        reply_markup=get_main_keyboard()
+    )
 
 async def main():
-    print("Bot started in GitHub Actions...")
+    print("Bot started...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
