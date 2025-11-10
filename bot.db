@@ -1,9 +1,0 @@
-CREATE TABLE user_connections (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    telegram_id INTEGER NOT NULL UNIQUE,
-    tg_token TEXT NOT NULL,
-    vk_token TEXT NOT NULL,
-    vk_group_id INTEGER NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-.exit
