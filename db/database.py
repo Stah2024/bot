@@ -25,3 +25,9 @@ def save_user_tokens(user_id, tg_token, vk_token, group_id):
         session.add(new_user)
     session.commit()
     session.close()
+
+def get_user_tokens(user_id):
+    session = SessionLocal()
+    user = session.query(UserConnection).filter_by(telegram_id=user_id).first()
+    session.close()
+    return user
