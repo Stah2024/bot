@@ -1,24 +1,24 @@
 name: Test TG Bot
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [ main ]
+  workflow_dispatch:  # Только ручной запуск
 
 jobs:
-  run-bot:
+  test-dependencies:
     runs-on: ubuntu-latest
-    timeout-minutes: 5  # 5 минут — для теста
-    steps:
-      - uses: actions/checkout@v4
+    timeout-minutes: 5
 
-      - uses: actions/setup-python@v5
+    steps:
+      - name: 📦 Клонируем репозиторий
+        uses: actions/checkout@v4
+
+      - name: 🐍 Устанавливаем Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - run: pip install -r requirements.txt
+      - name: 📚 Устанавливаем зависимости
+        run: pip install -r requirements.txt
 
-      - run: python main.py
-        env:
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          CRYPTO_KEY: ${{ secrets.CRYPTO_KEY }}
+      - name: ✅ Проверка завершена
+        run: echo "Готово. Бот не запускается в CI."
