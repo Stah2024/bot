@@ -1,3 +1,4 @@
+import requests
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -16,14 +17,21 @@ async def connect_callback(call: types.CallbackQuery, state: FSMContext):
     await call.answer()
 
 async def get_tg_token(message: types.Message, state: FSMContext):
+    token = message.text.strip()
+    url = f"https://api.telegram.org/bot{token}/getMe"
+
     try:
-        test_bot = types.Bot(token=message.text)
-        me = await test_bot.get_me()
-        await state.update_data(tg_token=message.text, tg_bot_name=me.username)
-        await message.answer(f"✅ Бот @{me.username} найден!\n\nТеперь введи Community Token ВК:")
-        await state.set_state(ConnectStates.waiting_vk_token)
-    except:
+        response = requests.get(url, timeout=5)
+        data = response.json()
+        if not data.get("ok") or "username" not in data.get("result", {}):
+            raise ValueError("Invalid token")
+    except Exception:
         await message.answer("❌ Неверный Telegram токен. Попробуй ещё:")
+        return
+
+    await state.update_data(tg_token=token, tg_bot_name=data["result"]["username"])
+    await message.answer(f"✅ Бот @{data['result']['username']} найден!\n\nТеперь введи Community Token ВК:")
+    await state.set_state(ConnectStates.waiting_vk_token)
 
 async def get_vk_token(message: types.Message, state: FSMContext):
     vk_token = message.text.strip()
