@@ -1,7 +1,7 @@
 from cryptography.fernet import Fernet
-import os
+from config import CRYPTO_KEY
 
-fernet = Fernet(os.getenv("CRYPTO_KEY").encode())
+fernet = Fernet(CRYPTO_KEY.encode())
 
 def encrypt(text: str) -> bytes:
     return fernet.encrypt(text.encode())
