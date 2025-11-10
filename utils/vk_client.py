@@ -1,10 +1,85 @@
 import requests
 
+VK_API_VERSION = "5.199"
+
 def validate_vk_token(token: str) -> dict:
-    url = "https://api.vk.com/method/groups.getById"
-    params = {
-        "access_token": token,
-        "v": "5.199"
-    }
-    response = requests.get(url, params=params)
-    return response.json()
+    try:
+        response = requests.get(
+            "https://api.vk.com/method/groups.getById",
+            params={"access_token": token, "v": VK_API_VERSION},
+            timeout=5
+        )
+        return response.json()
+    except Exception as e:
+        return {"error": str(e)}
+
+def post_to_vk(token: str, group_id: int, text: str, attachments: list = []) -> dict:
+    try:
+        response = requests.post(
+            "https://api.vk.com/method/wall.post",
+            params={
+                "owner_id": f"-{group_id}",
+                "message": text,
+                "attachments": ",".join(attachments),
+                "access_token": token,
+                "v": VK_API_VERSION
+            },
+            timeout=5
+        )
+        return response.json()
+    except Exception as e:
+        return {"error": str(e)}
+
+def upload_photo_to_vk(token: str, group_id: int, file_url: str) -> str | None:
+    try:
+        upload_server = requests.get(
+            "https://api.vk.com/method/photos.getWallUploadServer",
+            params={"group_id": group_id, "access_token": token, "v": VK_API_VERSION}
+        ).json()
+        upload_url = upload_server["response"]["upload_url"]
+
+        photo_data = requests.get(file_url).content
+        upload_response = requests.post(upload_url, files={"photo": ("photo.jpg", photo_data)}).json()
+
+        save_response = requests.get(
+            "https://api.vk.com/method/photos.saveWallPhoto",
+            params={
+                "group_id": group_id,
+                "photo": upload_response["photo"],
+                "server": upload_response["server"],
+                "hash": upload_response["hash"],
+                "access_token": token,
+                "v": VK_API_VERSION
+            }
+        ).json()
+
+        photo = save_response["response"][0]
+        return f'photo{photo["owner_id"]}_{photo["id"]}'
+    except Exception as e:
+        print(f"[upload_photo_to_vk] Error: {e}")
+        return None
+
+def upload_video_to_vk(token: str, group_id: int, file_url: str) -> str | None:
+    try:
+        save_response = requests.get(
+            "https://api.vk.com/method/video.save",
+            params={
+                "group_id": group_id,
+                "name": "Telegram Video",
+                "description": "",
+                "wallpost": 0,
+                "access_token": token,
+                "v": VK_API_VERSION
+            }
+        ).json()
+
+        upload_url = save_response["response"]["upload_url"]
+        video_data = requests.get(file_url).content
+        upload_response = requests.post(upload_url, files={"video_file": ("video.mp4", video_data)}).json()
+
+        video_id = save_response["response"]["video_id"]
+        owner_id = save_response["response"]["owner_id"]
+        return f'video{owner_id}_{video_id}'
+    except Exception as e:
+        print(f"[upload_video_to_vk] Error: {e}")
+        return None
