@@ -10,6 +10,8 @@ from handlers.settings import (
     connect_callback, get_tg_token, get_vk_token,
     get_group_id, ConnectStates
 )
+from handlers.repost import repost_channel_post  # 👈 репостер
+# ↓ можно вынести в handlers/help.py при желании
 
 logging.basicConfig(level=logging.INFO)
 
@@ -24,10 +26,32 @@ async def start(message: types.Message):
         reply_markup=get_main_keyboard()
     )
 
+# FSM
 dp.callback_query.register(connect_callback, lambda c: c.data == "connect")
 dp.message.register(get_tg_token, ConnectStates.waiting_tg_token)
 dp.message.register(get_vk_token, ConnectStates.waiting_vk_token)
 dp.message.register(get_group_id, ConnectStates.waiting_group_id)
+
+# Репост из канала
+dp.channel_post.register(repost_channel_post)
+
+# Заглушки для кнопок
+@dp.callback_query(lambda c: c.data == "pay")
+async def pay_callback(call: types.CallbackQuery):
+    await call.message.answer("💳 Оплата пока не подключена. 7 дней бесплатно.")
+    await call.answer()
+
+@dp.callback_query(lambda c: c.data == "help")
+async def help_callback(call: types.CallbackQuery):
+    await call.message.answer(
+        "📌 Инструкция:\n\n"
+        "1. Нажми «Подключить»\n"
+        "2. Введи токен Telegram-бота\n"
+        "3. Введи VK Community Token\n"
+        "4. Укажи ID группы ВКонтакте\n\n"
+        "После этого бот начнёт репостить из канала в VK."
+    )
+    await call.answer()
 
 async def main():
     print("Bot started...")
