@@ -1,11 +1,12 @@
+from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy import Column, Integer, String, DateTime
-from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
 
 class UserConnection(Base):
-    tablename = "user_connections"
+    __tablename__ = "user_connections"
 
     id = Column(Integer, primary_key=True)
     telegram_id = Column(Integer, nullable=False, unique=True)
