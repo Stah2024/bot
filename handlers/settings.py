@@ -46,14 +46,17 @@ async def connect_callback(call: types.CallbackQuery, state: FSMContext):
 @router.message(ConnectStates.waiting_vk_token)
 async def get_vk_token(message: types.Message, state: FSMContext):
     vk_token = message.text.strip()
+    print("[FSM] vk_token получен:", vk_token)
+
     check = validate_vk_token(vk_token)
+    print("[FSM] validate_vk_token вернул:", check)
 
     if "error" in check:
-        await message.answer("Неверный VK токен. Попробуй ещё:")
+        await message.answer("❌ Неверный VK токен. Попробуй ещё:")
         return
 
     await state.update_data(vk_token=vk_token)
-    await message.answer("VK токен принят!\n\nТеперь введи ID группы ВКонтакте (без минуса):")
+    await message.answer("✅ VK токен принят!\n\nТеперь введи ID группы ВКонтакте (без минуса):")
     await state.set_state(ConnectStates.waiting_group_id)
 
 # Получение VK group_id и сохранение связки
