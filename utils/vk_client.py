@@ -8,8 +8,17 @@ def validate_vk_token(token: str) -> dict:
             "https://api.vk.com/method/groups.getById",
             params={"access_token": token, "v": VK_API_VERSION},
             timeout=5
-        )
-        return response.json()
+        ).json()
+
+        if "error" in response:
+            return {"error": response["error"]["error_msg"]}
+
+        group = response["response"][0]
+        return {
+            "ok": True,
+            "group_id": group["id"],
+            "name": group["name"]
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -18,7 +27,7 @@ def post_to_vk(token: str, group_id: str, text: str, attachments: list = []) -> 
         response = requests.post(
             "https://api.vk.com/method/wall.post",
             params={
-                "owner_id": group_id,  # ← уже с минусом
+                "owner_id": group_id,
                 "message": text,
                 "attachments": ",".join(attachments) if attachments else None,
                 "access_token": token,
@@ -84,7 +93,7 @@ def upload_video_to_vk(token: str, group_id: str, file_url: str) -> str | None:
         upload_url = save_response["response"]["upload_url"]
         video_data = requests.get(file_url).content
 
-        upload_response = requests.post(upload_url, files={"video_file": ("video.mp4", video_data)}).json()
+        requests.post(upload_url, files={"video_file": ("video.mp4", video_data)})
 
         video_id = save_response["response"]["video_id"]
         owner_id = save_response["response"]["owner_id"]
