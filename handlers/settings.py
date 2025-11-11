@@ -17,6 +17,7 @@ class ConnectStates(StatesGroup):
 
 
 async def connect_callback(call: types.CallbackQuery, state: FSMContext):
+    await state.clear()  # ← ОЧИЩАЕМ СТАРОЕ СОСТОЯНИЕ
     await call.message.answer("Введи токен своего Telegram-бота (@BotFather):")
     await state.set_state(ConnectStates.waiting_tg_token)
     await call.answer()
@@ -32,7 +33,7 @@ async def get_tg_token(message: types.Message, state: FSMContext):
         if not data.get("ok") or "username" not in data.get("result", {}):
             raise ValueError("Invalid token")
     except Exception as e:
-        logger.error(f"Ошибка проверки TG токена: {e}")
+        logger.error(f"Ошибка TG токена: {e}")
         await message.answer("Неверный Telegram токен. Попробуй ещё:")
         return
 
@@ -57,12 +58,12 @@ async def get_vk_token(message: types.Message, state: FSMContext):
 async def get_group_id(message: types.Message, state: FSMContext):
     data = await state.get_data()
     
-    # ← ПРОВЕРКА: токены должны быть строками!
+    # ← ПРОВЕРКА: токены ДОЛЖНЫ быть строками
     tg_token = data.get("tg_token")
     vk_token = data.get("vk_token")
     tg_bot_name = data.get("tg_bot_name")
 
-    if not all(isinstance(x, str) for x in [tg_token, vk_token]):
+    if not tg_token or not vk_token or not isinstance(tg_token, str) or not isinstance(vk_token, str):
         await message.answer("Ошибка: данные повреждены. Начни заново: /start")
         await state.clear()
         return
@@ -86,7 +87,7 @@ async def get_group_id(message: types.Message, state: FSMContext):
             group_id=vk_group_id
         )
 
-        logger.info(f"Токены сохранены для user_id={message.from_user.id}, группа: {vk_group_id}")
+        logger.info(f"Токены сохранены: user_id={message.from_user.id}, группа={vk_group_id}")
 
         await message.answer(
             f"Все данные сохранены и зашифрованы!\n\n"
@@ -95,7 +96,7 @@ async def get_group_id(message: types.Message, state: FSMContext):
             "7 дней бесплатно. Дальше — 200 ₽ или 100 ⭐"
         )
     except Exception as e:
-        logger.error(f"Ошибка сохранения токенов: {e}")
+        logger.error(f"Ошибка сохранения: {e}")
         await message.answer("Ошибка при сохранении. Попробуй позже.")
     
     await state.clear()
