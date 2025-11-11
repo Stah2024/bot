@@ -1,8 +1,7 @@
-# db/database.py
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from db.models import Base, UserConnection
-from utils.crypto import encrypt, decrypt
+from utils.crypto import decrypt
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -19,26 +18,25 @@ def init_db():
         logger.error(f"Ошибка БД: {e}")
         raise
 
-def save_user_tokens(user_id: int, tg_token: str, vk_token: str, group_id: str):
+def save_user_tokens(user_id: int, tg_token: bytes, vk_token: bytes, group_id: str):
     session = SessionLocal()
     try:
         existing = session.query(UserConnection).filter_by(telegram_id=user_id).first()
-        enc_tg = encrypt(tg_token)
-        enc_vk = encrypt(vk_token)
 
         if existing:
-            existing.tg_token = enc_tg
-            existing.vk_token = enc_vk
+            existing.tg_token = tg_token
+            existing.vk_token = vk_token
             existing.vk_group_id = group_id
         else:
             user = UserConnection(
                 telegram_id=user_id,
-                tg_token=enc_tg,
-                vk_token=enc_vk,
+                tg_token=tg_token,
+                vk_token=vk_token,
                 vk_group_id=group_id
             )
             session.add(user)
         session.commit()
+        logger.info(f"Токены успешно сохранены для user_id={user_id}")
     except Exception as e:
         session.rollback()
         logger.error(f"Ошибка сохранения: {e}")
