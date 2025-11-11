@@ -9,7 +9,7 @@ from db.database import init_db, get_user_tokens, save_user_tokens
 from utils.crypto import encrypt
 from handlers.start import get_main_keyboard
 from handlers.settings import (
-    connect_callback, get_tg_token, get_vk_token,
+    connect_callback, get_vk_token,
     get_group_id, ConnectStates
 )
 from handlers.repost import repost_channel_post
@@ -29,7 +29,6 @@ async def start(message: types.Message):
 
 # FSM
 dp.callback_query.register(connect_callback, lambda c: c.data == "connect")
-dp.message.register(get_tg_token, ConnectStates.waiting_tg_token)
 dp.message.register(get_vk_token, ConnectStates.waiting_vk_token)
 dp.message.register(get_group_id, ConnectStates.waiting_group_id)
 
@@ -56,7 +55,6 @@ async def link_channel(message: types.Message):
 
     save_user_tokens(
         user_id=user_id,
-        tg_token=None,
         vk_token=encrypt(user["vk_token"]),
         group_id=user["vk_group_id"],
         channel_id=channel_id
@@ -75,9 +73,9 @@ async def help_callback(call: types.CallbackQuery):
     await call.message.answer(
         "📌 Инструкция:\n\n"
         "1. Нажми «Подключить»\n"
-        "2. Введи токен Telegram-бота\n"
-        "3. Введи VK Community Token\n"
-        "4. Укажи ID группы ВКонтакте\n\n"
+        "2. Введи VK Community Token\n"
+        "3. Укажи ID группы ВКонтакте\n"
+        "4. Напиши /link_<user_id> в канале\n\n"
         "После этого бот начнёт репостить из канала в VK."
     )
     await call.answer()
