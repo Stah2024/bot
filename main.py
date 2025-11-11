@@ -10,8 +10,8 @@ from handlers.settings import (
     connect_callback, get_tg_token, get_vk_token,
     get_group_id, ConnectStates
 )
-from handlers.repost import repost_channel_post  # 👈 репостер
-# ↓ можно вынести в handlers/help.py при желании
+from handlers.repost import repost_channel_post
+from handlers.link import router as link_router  # 👈 ДОБАВЛЕНО
 
 logging.basicConfig(level=logging.INFO)
 
@@ -34,6 +34,9 @@ dp.message.register(get_group_id, ConnectStates.waiting_group_id)
 
 # Репост из канала
 dp.channel_post.register(repost_channel_post)
+
+# Команда /link из канала
+dp.include_router(link_router)  # 👈 ДОБАВЛЕНО
 
 # Заглушки для кнопок
 @dp.callback_query(lambda c: c.data == "pay")
