@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import re
 from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
 from aiogram import types
@@ -35,15 +36,22 @@ dp.message.register(get_group_id, ConnectStates.waiting_group_id)
 # Репост из канала
 dp.channel_post.register(repost_channel_post)
 
-# Команда /link из канала
-@dp.channel_post(Command("link"))
+# Команда /link_<user_id> из канала
+@dp.channel_post()
 async def link_channel(message: types.Message):
+    if not message.text:
+        return
+
+    match = re.match(r"/link_(\d+)", message.text.strip())
+    if not match:
+        return
+
     channel_id = message.chat.id
-    user_id = message.from_user.id
+    user_id = int(match.group(1))
 
     user = get_user_tokens(user_id)
     if not user:
-        await message.answer("Сначала пройди настройку в личке.")
+        await message.answer("❌ Сначала пройди настройку в личке.")
         return
 
     save_user_tokens(
@@ -54,7 +62,7 @@ async def link_channel(message: types.Message):
         channel_id=channel_id
     )
 
-    await message.answer("Канал успешно привязан! Репосты будут идти в VK.")
+    await message.answer("✅ Канал привязан! Репосты будут идти в VK.")
 
 # Заглушки для кнопок
 @dp.callback_query(lambda c: c.data == "pay")
