@@ -1,9 +1,7 @@
 import logging
 import asyncio
-import re
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
-from aiogram import types
 from config import BOT_TOKEN
 from db.database import init_db, get_user_tokens, save_user_tokens
 from utils.crypto import encrypt
@@ -27,15 +25,29 @@ async def start(message: types.Message):
         reply_markup=get_main_keyboard()
     )
 
-# FSM
+# FSM: настройка VK
 dp.callback_query.register(connect_callback, lambda c: c.data == "connect")
 dp.message.register(get_vk_token, ConnectStates.waiting_vk_token)
 dp.message.register(get_group_id, ConnectStates.waiting_group_id)
 
-# Репост из канала
+# Репост из канала (бот как админ)
 dp.channel_post.register(repost_channel_post)
 
-# Привязка канала через команду в личке
+# Вариант 1: пересланное сообщение из канала
+@dp.message(lambda m: m.forward_from_chat and m.forward_from_chat.type == "channel")
+async def handle_forwarded_channel(message: types.Message, state):
+    channel_id = message.forward_from_chat.id
+    user_id = message.from_user.id
+
+    await state.clear()
+    await state.update_data(channel_id=channel_id)
+    await message.answer(
+        f"Канал `{channel_id}` обнаружен и привязан к вашему аккаунту.\n\n"
+        "Теперь введи Community Token ВК:"
+    )
+    await state.set_state(ConnectStates.waiting_vk_token)
+
+# Вариант 2: ручная привязка через команду
 @dp.message(Command("link_channel"))
 async def link_channel_manual(message: types.Message):
     args = message.text.strip().split()
@@ -77,7 +89,7 @@ async def help_callback(call: types.CallbackQuery):
         "1. Нажми «Подключить»\n"
         "2. Введи VK Community Token\n"
         "3. Укажи ID группы ВКонтакте\n"
-        "4. Напиши /link_channel <channel_id> в личке\n\n"
+        "4. Перешли сообщение из канала или напиши /link_channel <channel_id>\n\n"
         "После этого бот начнёт репостить из канала в VK."
     )
     await call.answer()
