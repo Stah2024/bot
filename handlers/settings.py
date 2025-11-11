@@ -27,19 +27,22 @@ async def handle_forwarded_channel(message: types.Message, state: FSMContext):
     )
     await state.set_state(ConnectStates.waiting_vk_token)
 
-# Вариант 2: бот добавлен в канал как админ
+# Вариант 2: бот добавлен в канал как админ (репост)
 @router.channel_post()
 async def handle_channel_post(message: types.Message):
     channel_id = message.chat.id
     logger.info(f"[CHANNEL POST] Получено сообщение из канала {channel_id}")
-    # Здесь можно логировать или отправить сообщение в лог-чат
 
-# Кнопка "Привязать канал" (например, inline-кнопка)
+# Кнопка "Подключить"
 @router.callback_query(lambda c: c.data == "connect")
 async def connect_callback(call: types.CallbackQuery, state: FSMContext):
     await state.clear()
-    await call.message.answer("Введи Community Token ВК:")
-    await state.set_state(ConnectStates.waiting_vk_token)
+    await call.message.answer(
+        "📌 Настройка:\n\n"
+        "1️⃣ Перешли любое сообщение из канала в личку\n"
+        "2️⃣ Введи Community Token ВК\n"
+        "3️⃣ Введи ID группы ВКонтакте (без минуса)"
+    )
     await call.answer()
 
 # Получение VK токена
@@ -73,6 +76,11 @@ async def get_group_id(message: types.Message, state: FSMContext):
         await state.clear()
         return
 
+    if not channel_id:
+        await message.answer("❌ Сначала перешли сообщение из канала, чтобы я знал, куда репостить.")
+        await state.clear()
+        return
+
     try:
         group_id_input = int(message.text.strip())
     except ValueError:
@@ -94,7 +102,7 @@ async def get_group_id(message: types.Message, state: FSMContext):
         logger.info(f"Токены сохранены: user_id={message.from_user.id}, группа={vk_group_id}, канал={channel_id}")
 
         await message.answer(
-            f"Все данные сохранены и зашифрованы!\n\n"
+            f"✅ Все данные сохранены и зашифрованы!\n\n"
             f"VK Group ID: {group_id_input}\n\n"
             "7 дней бесплатно. Дальше — 200 ₽ или 100 ⭐"
         )
