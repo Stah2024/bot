@@ -4,14 +4,14 @@ from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
 from aiogram import types
 from config import BOT_TOKEN
-from db.database import init_db
+from db.database import init_db, get_user_tokens, save_user_tokens
+from utils.crypto import encrypt
 from handlers.start import get_main_keyboard
 from handlers.settings import (
     connect_callback, get_tg_token, get_vk_token,
     get_group_id, ConnectStates
 )
 from handlers.repost import repost_channel_post
-from handlers.link import router as link_router  # 👈 ДОБАВЛЕНО
 
 logging.basicConfig(level=logging.INFO)
 
@@ -36,7 +36,25 @@ dp.message.register(get_group_id, ConnectStates.waiting_group_id)
 dp.channel_post.register(repost_channel_post)
 
 # Команда /link из канала
-dp.include_router(link_router)  # 👈 ДОБАВЛЕНО
+@dp.channel_post(Command("link"))
+async def link_channel(message: types.Message):
+    channel_id = message.chat.id
+    user_id = message.from_user.id
+
+    user = get_user_tokens(user_id)
+    if not user:
+        await message.answer("Сначала пройди настройку в личке.")
+        return
+
+    save_user_tokens(
+        user_id=user_id,
+        tg_token=None,
+        vk_token=encrypt(user["vk_token"]),
+        group_id=user["vk_group_id"],
+        channel_id=channel_id
+    )
+
+    await message.answer("Канал успешно привязан! Репосты будут идти в VK.")
 
 # Заглушки для кнопок
 @dp.callback_query(lambda c: c.data == "pay")
