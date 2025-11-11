@@ -13,10 +13,10 @@ def validate_vk_token(token: str) -> dict:
         if "error" in response:
             return {"error": response["error"]["error_msg"]}
 
-        group = response["response"][0]
+        group = response.get("response", [{}])[0] or response.get("groups", [{}])[0]
         return {
             "ok": True,
-            "group_id": group["id"],
+            "group_id": str(group["id"]),
             "name": group["name"]
         }
     except Exception as e:
