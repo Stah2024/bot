@@ -35,22 +35,24 @@ dp.message.register(get_group_id, ConnectStates.waiting_group_id)
 # Репост из канала
 dp.channel_post.register(repost_channel_post)
 
-# Команда /link_<user_id> из канала
-@dp.channel_post()
-async def link_channel(message: types.Message):
-    if not message.text:
+# Привязка канала через команду в личке
+@dp.message(Command("link_channel"))
+async def link_channel_manual(message: types.Message):
+    args = message.text.strip().split()
+    if len(args) != 2:
+        await message.answer("❌ Используй: /link_channel <channel_id>")
         return
 
-    match = re.match(r"/link_(\d+)", message.text.strip())
-    if not match:
+    try:
+        channel_id = int(args[1])
+    except ValueError:
+        await message.answer("❌ channel_id должен быть числом.")
         return
 
-    channel_id = message.chat.id
-    user_id = int(match.group(1))
-
+    user_id = message.from_user.id
     user = get_user_tokens(user_id)
     if not user:
-        await message.answer("❌ Сначала пройди настройку в личке.")
+        await message.answer("❌ Сначала пройди настройку: /start")
         return
 
     save_user_tokens(
@@ -60,7 +62,7 @@ async def link_channel(message: types.Message):
         channel_id=channel_id
     )
 
-    await message.answer("✅ Канал привязан! Репосты будут идти в VK.")
+    await message.answer(f"✅ Канал {channel_id} привязан! Репосты будут идти в VK.")
 
 # Заглушки для кнопок
 @dp.callback_query(lambda c: c.data == "pay")
@@ -75,7 +77,7 @@ async def help_callback(call: types.CallbackQuery):
         "1. Нажми «Подключить»\n"
         "2. Введи VK Community Token\n"
         "3. Укажи ID группы ВКонтакте\n"
-        "4. Напиши /link_<user_id> в канале\n\n"
+        "4. Напиши /link_channel <channel_id> в личке\n\n"
         "После этого бот начнёт репостить из канала в VK."
     )
     await call.answer()
