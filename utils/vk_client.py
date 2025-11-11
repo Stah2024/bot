@@ -13,38 +13,46 @@ def validate_vk_token(token: str) -> dict:
     except Exception as e:
         return {"error": str(e)}
 
-def post_to_vk(token: str, group_id: int, text: str, attachments: list = []) -> dict:
+def post_to_vk(token: str, group_id: str, text: str, attachments: list = []) -> dict:
     try:
         response = requests.post(
             "https://api.vk.com/method/wall.post",
             params={
-                "owner_id": f"-{group_id}",
+                "owner_id": group_id,  # ← уже с минусом
                 "message": text,
-                "attachments": ",".join(attachments),
+                "attachments": ",".join(attachments) if attachments else None,
                 "access_token": token,
                 "v": VK_API_VERSION
             },
             timeout=5
-        )
-        return response.json()
+        ).json()
+
+        if "error" in response:
+            print("[VK] Ошибка wall.post:", response["error"])
+        else:
+            print("[VK] Успешно опубликовано:", response)
+
+        return response
     except Exception as e:
+        print(f"[post_to_vk] Error: {e}")
         return {"error": str(e)}
 
-def upload_photo_to_vk(token: str, group_id: int, file_url: str) -> str | None:
+def upload_photo_to_vk(token: str, group_id: str, file_url: str) -> str | None:
     try:
         upload_server = requests.get(
             "https://api.vk.com/method/photos.getWallUploadServer",
-            params={"group_id": group_id, "access_token": token, "v": VK_API_VERSION}
+            params={"group_id": group_id.lstrip("-"), "access_token": token, "v": VK_API_VERSION}
         ).json()
-        upload_url = upload_server["response"]["upload_url"]
 
+        upload_url = upload_server["response"]["upload_url"]
         photo_data = requests.get(file_url).content
+
         upload_response = requests.post(upload_url, files={"photo": ("photo.jpg", photo_data)}).json()
 
         save_response = requests.get(
             "https://api.vk.com/method/photos.saveWallPhoto",
             params={
-                "group_id": group_id,
+                "group_id": group_id.lstrip("-"),
                 "photo": upload_response["photo"],
                 "server": upload_response["server"],
                 "hash": upload_response["hash"],
@@ -59,12 +67,12 @@ def upload_photo_to_vk(token: str, group_id: int, file_url: str) -> str | None:
         print(f"[upload_photo_to_vk] Error: {e}")
         return None
 
-def upload_video_to_vk(token: str, group_id: int, file_url: str) -> str | None:
+def upload_video_to_vk(token: str, group_id: str, file_url: str) -> str | None:
     try:
         save_response = requests.get(
             "https://api.vk.com/method/video.save",
             params={
-                "group_id": group_id,
+                "group_id": group_id.lstrip("-"),
                 "name": "Telegram Video",
                 "description": "",
                 "wallpost": 0,
@@ -75,6 +83,7 @@ def upload_video_to_vk(token: str, group_id: int, file_url: str) -> str | None:
 
         upload_url = save_response["response"]["upload_url"]
         video_data = requests.get(file_url).content
+
         upload_response = requests.post(upload_url, files={"video_file": ("video.mp4", video_data)}).json()
 
         video_id = save_response["response"]["video_id"]
