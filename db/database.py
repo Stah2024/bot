@@ -18,7 +18,7 @@ def init_db():
         logger.error(f"Ошибка БД: {e}")
         raise
 
-def save_user_tokens(user_id: int, tg_token: bytes, vk_token: bytes, group_id: str):
+def save_user_tokens(user_id: int, tg_token: bytes, vk_token: bytes, group_id: str, channel_id: int = None):
     session = SessionLocal()
     try:
         existing = session.query(UserConnection).filter_by(telegram_id=user_id).first()
@@ -27,12 +27,15 @@ def save_user_tokens(user_id: int, tg_token: bytes, vk_token: bytes, group_id: s
             existing.tg_token = tg_token
             existing.vk_token = vk_token
             existing.vk_group_id = group_id
+            if channel_id:
+                existing.channel_id = channel_id
         else:
             user = UserConnection(
                 telegram_id=user_id,
                 tg_token=tg_token,
                 vk_token=vk_token,
-                vk_group_id=group_id
+                vk_group_id=group_id,
+                channel_id=channel_id
             )
             session.add(user)
         session.commit()
@@ -57,6 +60,23 @@ def get_user_tokens(user_id: int):
         return None
     except Exception as e:
         logger.error(f"Ошибка чтения: {e}")
+        return None
+    finally:
+        session.close()
+
+def get_user_tokens_by_channel(channel_id: int):
+    session = SessionLocal()
+    try:
+        user = session.query(UserConnection).filter_by(channel_id=channel_id).first()
+        if user:
+            return {
+                "tg_token": decrypt(user.tg_token),
+                "vk_token": decrypt(user.vk_token),
+                "vk_group_id": user.vk_group_id
+            }
+        return None
+    except Exception as e:
+        logger.error(f"Ошибка поиска по каналу: {e}")
         return None
     finally:
         session.close()
