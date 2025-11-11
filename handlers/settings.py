@@ -1,4 +1,4 @@
-from aiogram import types
+from aiogram import types, Router, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from utils.crypto import encrypt
@@ -7,17 +7,43 @@ from db.database import save_user_tokens
 import logging
 
 logger = logging.getLogger(__name__)
+router = Router()
 
 class ConnectStates(StatesGroup):
     waiting_vk_token = State()
     waiting_group_id = State()
 
+# Вариант 1: пересланное сообщение из канала
+@router.message(lambda m: m.forward_from_chat and m.forward_from_chat.type == "channel")
+async def handle_forwarded_channel(message: types.Message, state: FSMContext):
+    channel_id = message.forward_from_chat.id
+    user_id = message.from_user.id
+
+    await state.clear()
+    await state.update_data(channel_id=channel_id)
+    await message.answer(
+        f"Канал `{channel_id}` обнаружен и привязан к вашему аккаунту.\n\n"
+        "Теперь введи Community Token ВК:"
+    )
+    await state.set_state(ConnectStates.waiting_vk_token)
+
+# Вариант 2: бот добавлен в канал как админ
+@router.channel_post()
+async def handle_channel_post(message: types.Message):
+    channel_id = message.chat.id
+    logger.info(f"[CHANNEL POST] Получено сообщение из канала {channel_id}")
+    # Здесь можно логировать или отправить сообщение в лог-чат
+
+# Кнопка "Привязать канал" (например, inline-кнопка)
+@router.callback_query(lambda c: c.data == "connect")
 async def connect_callback(call: types.CallbackQuery, state: FSMContext):
     await state.clear()
     await call.message.answer("Введи Community Token ВК:")
     await state.set_state(ConnectStates.waiting_vk_token)
     await call.answer()
 
+# Получение VK токена
+@router.message(ConnectStates.waiting_vk_token)
 async def get_vk_token(message: types.Message, state: FSMContext):
     vk_token = message.text.strip()
     check = validate_vk_token(vk_token)
@@ -30,9 +56,14 @@ async def get_vk_token(message: types.Message, state: FSMContext):
     await message.answer("VK токен принят!\n\nТеперь введи ID группы ВКонтакте (без минуса):")
     await state.set_state(ConnectStates.waiting_group_id)
 
+# Получение VK group_id и сохранение связки
+@router.message(ConnectStates.waiting_group_id)
 async def get_group_id(message: types.Message, state: FSMContext):
     data = await state.get_data()
     vk_token = data.get("vk_token")
+    channel_id = data.get("channel_id") or (
+        message.chat.id if message.chat.type == "channel" else None
+    )
 
     if not vk_token or not isinstance(vk_token, str):
         await message.answer("Ошибка: данные повреждены. Начни заново: /start")
@@ -49,7 +80,6 @@ async def get_group_id(message: types.Message, state: FSMContext):
 
     try:
         encrypted_vk = encrypt(vk_token)
-        channel_id = message.chat.id if message.chat.type == "channel" else None
 
         save_user_tokens(
             user_id=message.from_user.id,
