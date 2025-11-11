@@ -15,7 +15,7 @@ def validate_vk_token(token: str) -> dict:
         if "error" in response:
             return {"error": response["error"]["error_msg"]}
 
-        group = response["groups"][0]
+        group = response["response"]["groups"][0]  # ← исправлено
         return {
             "ok": True,
             "group_id": str(group["id"]),
