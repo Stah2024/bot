@@ -1,4 +1,3 @@
-# handlers/settings.py
 import requests
 from aiogram import types
 from aiogram.fsm.context import FSMContext
@@ -17,7 +16,7 @@ class ConnectStates(StatesGroup):
 
 
 async def connect_callback(call: types.CallbackQuery, state: FSMContext):
-    await state.clear()  # ← ОЧИЩАЕМ СТАРОЕ СОСТОЯНИЕ
+    await state.clear()
     await call.message.answer("Введи токен своего Telegram-бота (@BotFather):")
     await state.set_state(ConnectStates.waiting_tg_token)
     await call.answer()
@@ -57,8 +56,7 @@ async def get_vk_token(message: types.Message, state: FSMContext):
 
 async def get_group_id(message: types.Message, state: FSMContext):
     data = await state.get_data()
-    
-    # ← ПРОВЕРКА: токены ДОЛЖНЫ быть строками
+
     tg_token = data.get("tg_token")
     vk_token = data.get("vk_token")
     tg_bot_name = data.get("tg_bot_name")
@@ -80,14 +78,18 @@ async def get_group_id(message: types.Message, state: FSMContext):
         encrypted_tg = encrypt(tg_token)
         encrypted_vk = encrypt(vk_token)
 
+        # Получаем ID канала, если пользователь пишет из канала
+        channel_id = message.chat.id if message.chat.type == "channel" else None
+
         save_user_tokens(
             user_id=message.from_user.id,
             tg_token=encrypted_tg,
             vk_token=encrypted_vk,
-            group_id=vk_group_id
+            group_id=vk_group_id,
+            channel_id=channel_id
         )
 
-        logger.info(f"Токены сохранены: user_id={message.from_user.id}, группа={vk_group_id}")
+        logger.info(f"Токены сохранены: user_id={message.from_user.id}, группа={vk_group_id}, канал={channel_id}")
 
         await message.answer(
             f"Все данные сохранены и зашифрованы!\n\n"
@@ -98,5 +100,5 @@ async def get_group_id(message: types.Message, state: FSMContext):
     except Exception as e:
         logger.error(f"Ошибка сохранения: {e}")
         await message.answer("Ошибка при сохранении. Попробуй позже.")
-    
+
     await state.clear()
