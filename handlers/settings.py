@@ -24,19 +24,16 @@ async def handle_forwarded_channel(message: types.Message, state: FSMContext):
     await state.update_data(channel_id=channel_id)
     await message.answer(
         f"Канал `{channel_id}` обнаружен и привязан.\n\n"
-        "Теперь пришли **Community Token** из **настроек группы ВК**:\n"
-        "→ Управление → Работа с API → Создать ключ\n"
-        "→ Отметь: `wall`, `photos`, `video`, `docs`\n"
-        "→ Скопируй токен и пришли сюда."
+        "Теперь пришли **standalone-токен** (user access token):\n\n"
+        "1. https://vk.com/apps?act=manage → Создать → Web\n"
+        "2. Адрес: `https://example.com`, домен: `example.com`\n"
+        "3. Сохранить → запиши ID\n"
+        "4. Открой: https://oauth.vk.com/authorize?client_id=ТВОЙ_ID&scope=wall,photos,video,docs,groups,offline&response_type=token&redirect_uri=https://oauth.vk.com/blank.html&v=5.199\n"
+        "5. Разрешить → скопируй токен (vk1.a...)\n\n"
+        "Пришли его сюда:",
+        parse_mode="Markdown"
     )
     await state.set_state(ConnectStates.waiting_vk_token)
-
-
-# Репост из канала (бот как админ)
-@router.channel_post()
-async def handle_channel_post(message: types.Message):
-    channel_id = message.chat.id
-    logger.info(f"[CHANNEL POST] Сообщение из канала {channel_id}")
 
 
 # Кнопка "Подключить"
@@ -45,27 +42,25 @@ async def connect_callback(call: types.CallbackQuery, state: FSMContext):
     await state.clear()
     await call.message.answer(
         "Настройка подключения:\n\n"
-        "1. Добавь бота в **Telegram-канал** как админа:\n"
-        "   • Читать сообщения\n"
-        "   • Публиковать сообщения\n\n"
-        "2. Перешли **любое сообщение из канала** в личку боту.\n\n"
-        "3. В **VK-группе**:\n"
-        "   → Управление → Работа с API → Создать ключ\n"
-        "   → Отметь: `wall`, `photos`, `video`, `docs`\n"
-        "   → Скопируй токен → пришли боту\n\n"
-        "4. Введи **ID группы ВК** (без минуса, например: `12345678`)\n\n"
-        "После этого бот начнёт репостить из TG в VK."
+        "1. Добавь бота в **Telegram-канал** как админа (чтение + посты)\n"
+        "2. Перешли **любое сообщение из канала** в личку боту\n"
+        "3. Создай **standalone-токен**:\n"
+        "   → https://vk.com/apps?act=manage → Web → example.com\n"
+        "   → Получи токен по ссылке (vk1.a...)\n"
+        "4. Пришли токен → бот сам покажет твои группы\n"
+        "5. Выбери группу → готово\n\n"
+        "После этого репост с фото/видео будет работать!"
     )
     await call.answer()
 
 
-# Получение VK токена
+# Получение VK токена (standalone)
 @router.message(ConnectStates.waiting_vk_token)
 async def get_vk_token(message: types.Message, state: FSMContext):
     vk_token = message.text.strip()
     logger.info(f"[FSM] Получен VK токен от user {message.from_user.id}")
 
-    # Проверяем токен
+    # Проверяем standalone-токен
     check = validate_vk_token(vk_token)
     logger.info(f"[FSM] validate_vk_token: {check}")
 
@@ -80,20 +75,64 @@ async def get_vk_token(message: types.Message, state: FSMContext):
     # Сохраняем токен
     await state.update_data(vk_token=vk_token)
 
-    # Автоопределение группы из токена (если сервисный)
-    if check.get("ok"):
-        group_id = check["group_id"]
-        await state.update_data(auto_group_id=f"-{group_id}")
+    # Получаем группы, где пользователь — админ
+    groups = check.get("groups", [])
+    if not groups:
+        await message.answer("Ты не админ ни в одной группе. Введи ID вручную (без -):")
+        await state.set_state(ConnectStates.waiting_group_id)
+        return
+
+    if len(groups) == 1:
+        # Одна группа — авто
+        g = groups[0]
+        await state.update_data(vk_group_id=f"-{g['id']}", group_name=g["name"])
         await message.answer(
-            f"Токен принят!\n"
-            f"Группа найдена: `{check['name']}` (ID: {group_id})\n\n"
-            "Подтверди ID (или введи другой, без минуса):",
+            f"Группа найдена: `{g['name']}` (ID: {g['id']})\n\n"
+            "Подтверди: напиши `да` или введи другой ID (без -)",
             parse_mode="Markdown"
         )
     else:
-        await message.answer("Токен принят!\n\nВведи ID группы ВК (без минуса):")
+        # Несколько групп — выбор
+        kb = []
+        for g in groups:
+            kb.append([types.InlineKeyboardButton(
+                text=f"{g['name']} ({g['id']})",
+                callback_data=f"select_group:{g['id']}"
+            )])
+        kb.append([types.InlineKeyboardButton(text="Ввести вручную", callback_data="manual_group")])
+        keyboard = types.InlineKeyboardMarkup(inline_keyboard=kb)
+        await message.answer(
+            "Выбери группу для репоста:",
+            reply_markup=keyboard
+        )
+        await state.update_data(available_groups=groups)
 
     await state.set_state(ConnectStates.waiting_group_id)
+
+
+# Выбор группы из списка
+@router.callback_query(lambda c: c.data.startswith("select_group:"))
+async def select_group(call: types.CallbackQuery, state: FSMContext):
+    group_id = call.data.split(":")[1]
+    data = await state.get_data()
+    groups = data.get("available_groups", [])
+    group = next((g for g in groups if g["id"] == group_id), None)
+    if group:
+        await state.update_data(vk_group_id=f"-{group_id}", group_name=group["name"])
+        await call.message.edit_text(
+            f"Выбрана: `{group['name']}` (ID: {group_id})\n\n"
+            "Теперь всё готово!",
+            parse_mode="Markdown"
+        )
+    await call.answer()
+    await finalize_connection(call.message, state)
+
+
+# Ввод вручную
+@router.callback_query(lambda c: c.data == "manual_group")
+async def manual_group(call: types.CallbackQuery):
+    await call.message.edit_text("Введи ID группы ВК вручную (без -):")
+    await call.answer()
 
 
 # Получение group_id и сохранение
@@ -103,18 +142,13 @@ async def get_group_id(message: types.Message, state: FSMContext):
     vk_token = data.get("vk_token")
     channel_id = data.get("channel_id")
 
-    if not vk_token:
-        await message.answer("Ошибка: токен потерян. Начни заново: /start")
-        await state.clear()
-        return
-
-    if not channel_id:
-        await message.answer("Сначала перешли сообщение из канала.")
+    if not vk_token or not channel_id:
+        await message.answer("Ошибка: данные потеряны. Начни заново.")
         await state.clear()
         return
 
     # Авто-ID из токена
-    auto_id = data.get("auto_group_id")
+    auto_id = data.get("vk_group_id")
 
     try:
         input_text = message.text.strip()
@@ -127,28 +161,34 @@ async def get_group_id(message: types.Message, state: FSMContext):
         await message.answer("ID должен быть числом. Попробуй ещё:")
         return
 
+    await finalize_connection(message, state, group_id)
+
+
+# Финализация (общая функция)
+async def finalize_connection(message: types.Message, state: FSMContext, group_id=None):
+    data = await state.get_data()
+    vk_token = data["vk_token"]
+    channel_id = data["channel_id"]
+    group_id = group_id or data.get("vk_group_id")
+
     try:
         encrypted_token = encrypt(vk_token)
-
         save_user_tokens(
             user_id=message.from_user.id,
             vk_token=encrypted_token,
             group_id=group_id,
             channel_id=channel_id
         )
-
         logger.info(f"Сохранено: user={message.from_user.id}, группа={group_id}, канал={channel_id}")
-
         await message.answer(
-            f"Всё подключено!\n\n"
-            f"VK Group: `{group_id}`\n"
-            f"Telegram Channel: `{channel_id}`\n\n"
-            "Бот начнёт репостить новые посты.",
+            f"Подключено!\n\n"
+            f"VK: `{group_id}`\n"
+            f"TG: `{channel_id}`\n\n"
+            "Репост с фото/видео начнётся автоматически.",
             parse_mode="Markdown"
         )
-
     except Exception as e:
-        logger.error(f"Ошибка сохранения: {e}")
-        await message.answer("Ошибка при сохранении. Попробуй позже.")
+        logger.error(f"Ошибка: {e}")
+        await message.answer("Ошибка сохранения. Попробуй позже.")
 
     await state.clear()
