@@ -35,16 +35,18 @@ def validate_vk_token(token: str) -> dict:
         return {"error": f"Сеть/таймаут: {str(e)}"}
 
 
-def post_to_vk(token: str, group_id: str, text: str, attachments: list = None) -> dict:
+def post_to_vk(token: str, group_id: str | int, text: str, attachments: list = None) -> dict:
     """Публикует пост в VK. attachments — список строк типа 'photo123_456'"""
     if attachments is None:
         attachments = []
 
+    group_id_str = str(group_id)  # ← Поддержка int и str
+
     try:
         params = {
-            "owner_id": group_id,
+            "owner_id": group_id_str,
             "from_group": 1,
-            "message": text[:4096],  # ← VK лимит
+            "message": text[:4096],
             "access_token": token,
             "v": VK_API_VERSION
         }
@@ -71,14 +73,16 @@ def post_to_vk(token: str, group_id: str, text: str, attachments: list = None) -
         return {"error": str(e)}
 
 
-def upload_photo_to_vk(token: str, group_id: str, file_url: str) -> str | None:
+def upload_photo_to_vk(token: str, group_id: str | int, file_url: str) -> str | None:
     """Загружает фото из URL → возвращает 'photo123_456'"""
+    group_id_str = str(group_id).lstrip("-")  # ← Безопасно: int → str → lstrip
+
     try:
         # 1. Получаем сервер
         upload_server_resp = requests.get(
             "https://api.vk.com/method/photos.getWallUploadServer",
             params={
-                "group_id": group_id.lstrip("-"),
+                "group_id": group_id_str,
                 "access_token": token,
                 "v": VK_API_VERSION
             },
@@ -112,7 +116,7 @@ def upload_photo_to_vk(token: str, group_id: str, file_url: str) -> str | None:
         save_resp = requests.get(
             "https://api.vk.com/method/photos.saveWallPhoto",
             params={
-                "group_id": group_id.lstrip("-"),
+                "group_id": group_id_str,
                 "photo": upload_resp["photo"],
                 "server": upload_resp["server"],
                 "hash": upload_resp["hash"],
@@ -136,16 +140,18 @@ def upload_photo_to_vk(token: str, group_id: str, file_url: str) -> str | None:
         return None
 
 
-def upload_video_to_vk(token: str, group_id: str, file_url: str) -> str | None:
+def upload_video_to_vk(token: str, group_id: str | int, file_url: str) -> str | None:
     """Загружает видео из URL → возвращает 'video123_456'"""
+    group_id_str = str(group_id).lstrip("-")  # ← Безопасно: int → str → lstrip
+
     try:
         # 1. Получаем upload_url
         save_resp = requests.get(
             "https://api.vk.com/method/video.save",
             params={
-                "group_id": group_id.lstrip("-"),
+                "group_id": group_id_str,
                 "name": "Репост из Telegram",
-                "wallpost": 1,  # ← сразу прикрепить к стене
+                "wallpost": 1,
                 "access_token": token,
                 "v": VK_API_VERSION
             },
@@ -160,7 +166,7 @@ def upload_video_to_vk(token: str, group_id: str, file_url: str) -> str | None:
 
         # 2. Скачиваем видео
         video_data = requests.get(file_url, timeout=30).content
-        if len(video_data) > 25 * 1024 * 1024:  # >25MB — VK не примет
+        if len(video_data) > 25 * 1024 * 1024:  # >25MB
             logging.warning("[upload_video] Видео >25MB — пропускаем")
             return None
 
@@ -168,14 +174,14 @@ def upload_video_to_vk(token: str, group_id: str, file_url: str) -> str | None:
         upload_resp = requests.post(
             upload_url,
             files={"video_file": ("video.mp4", video_data, "video/mp4")},
-            timeout=60  # видео долго
+            timeout=60
         )
 
         if upload_resp.status_code != 200:
             logging.error(f"[upload_video] Ошибка загрузки: {upload_resp.text}")
             return None
 
-        # 4. Видео уже сохранено — берём ID
+        # 4. Берём ID
         owner_id = save_resp["response"]["owner_id"]
         video_id = save_resp["response"]["video_id"]
         video_str = f"video{owner_id}_{video_id}"
