@@ -15,7 +15,7 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 # === ПОДПИСКА НА КАНАЛЫ ===
-REQUIRED_CHANNELS = [-1001234567890, -1009876543210]  # ← ЗАМЕНИ НА СВОИ
+REQUIRED_CHANNELS = [-1001792603455, -1003347493013]  # ← ЗАМЕНИ НА СВОИ
 
 async def check_subscription(user_id: int, bot: Bot) -> bool:
     for channel_id in REQUIRED_CHANNELS:
