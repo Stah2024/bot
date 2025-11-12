@@ -5,34 +5,61 @@ VK_API_VERSION = "5.199"
 logging.basicConfig(level=logging.INFO)
 
 def validate_vk_token(token: str) -> dict:
-    """Проверяет токен: возвращает ID группы и имя"""
+    """Проверяет любой токен: сервисный (Community) или standalone (User)"""
     try:
+        # === 1. Пробуем как СЕРВИСНЫЙ токен (groups.getById без group_ids) ===
         response = requests.get(
             "https://api.vk.com/method/groups.getById",
             params={"access_token": token, "v": VK_API_VERSION},
             timeout=10
         ).json()
 
-        print("[VK] validate_vk_token ответ:", response)
+        print("[VK] validate_vk_token (сервисный) ответ:", response)
+
+        if "error" not in response and response.get("response", {}).get("groups"):
+            groups = response["response"]["groups"]
+            if groups:
+                g = groups[0]
+                return {
+                    "ok": True,
+                    "group_id": str(g["id"]),
+                    "name": g["name"],
+                    "type": "service"
+                }
+
+        # === 2. Пробуем как STANDALONE токен (groups.get + filter=admin) ===
+        response = requests.get(
+            "https://api.vk.com/method/groups.get",
+            params={
+                "access_token": token,
+                "v": VK_API_VERSION,
+                "extended": 1,
+                "filter": "admin",
+                "fields": "name"
+            },
+            timeout=10
+        ).json()
+
+        print("[VK] validate_vk_token (standalone) ответ:", response)
 
         if "error" in response:
             err = response["error"]
             return {"error": err.get("error_msg", "Unknown error")}
 
-        groups = response.get("response", {}).get("groups", [])
-        if not groups:
-            return {"error": "Группа не найдена"}
+        items = response.get("response", {}).get("items", [])
+        if not items:
+            return {"error": "Нет групп, где вы админ"}
 
-        group = groups[0]
+        groups = [{"id": str(g["id"]), "name": g["name"]} for g in items]
         return {
             "ok": True,
-            "group_id": str(group["id"]),
-            "name": group["name"]
+            "groups": groups,
+            "type": "standalone"
         }
 
     except Exception as e:
         logging.error(f"[validate_vk_token] Критическая ошибка: {e}")
-        return {"error": f"Сеть/таймаут: {str(e)}"}
+        return {"error": "Сеть/таймаут"}
 
 
 def post_to_vk(token: str, group_id: str | int, text: str, attachments: list = None) -> dict:
