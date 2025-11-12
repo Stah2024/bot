@@ -70,4 +70,4 @@ async def repost_channel_post(message: types.Message):
         response = post_to_vk(vk_token, group_id, text, attachments)
         print("[VK] Ответ:", response)
     except Exception as e:
-        logging.error(f"[VK] Публикация не удалась: {e}") 
+        logging.error(f"[VK] Публикация не удалась: {e}")
