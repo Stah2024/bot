@@ -46,5 +46,5 @@ async def repost_channel_post(message: types.Message):
 
     print("[VK] Публикуем пост:", text)
     print("[VK] Вложения:", attachments)
-    response = post_to_vk(vk_token, group_id, text, attachments)
+    response = post_to_vk(vk_token, group_id, text, attachments or [])
     print("[VK] Ответ:", response)
