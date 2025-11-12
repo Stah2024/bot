@@ -18,8 +18,33 @@ init_db()
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
+# 🔒 ID каналов, на которые обязательна подписка
+REQUIRED_CHANNELS = [-1001234567890, -1009876543210]  # ← замени на свои ID
+
+async def check_subscription(user_id: int, bot: Bot) -> bool:
+    for channel_id in REQUIRED_CHANNELS:
+        try:
+            member = await bot.get_chat_member(chat_id=channel_id, user_id=user_id)
+            if member.status not in ("member", "administrator", "creator"):
+                return False
+        except Exception as e:
+            logging.warning(f"[SUBSCRIBE] Ошибка проверки канала {channel_id}: {e}")
+            return False
+    return True
+
 @dp.message(Command("start"))
 async def start(message: types.Message):
+    is_subscribed = await check_subscription(message.from_user.id, bot)
+    if not is_subscribed:
+        await message.answer(
+            "🚫 Для использования бота нужно подписаться на оба канала:\n\n"
+            "📢 [Канал 1](https://t.me/your_channel_1)\n"
+            "📢 [Канал 2](https://t.me/your_channel_2)\n\n"
+            "После подписки нажми /start снова.",
+            parse_mode="Markdown"
+        )
+        return
+
     await message.answer(
         "Привет! Я репост-бот TG → VK\nВыбери действие:",
         reply_markup=get_main_keyboard()
@@ -33,7 +58,7 @@ dp.message.register(get_group_id, ConnectStates.waiting_group_id)
 # Репост из канала (бот как админ)
 dp.channel_post.register(repost_channel_post)
 
-# Вариант 1: пересланное сообщение из канала
+# Привязка канала через пересланное сообщение
 @dp.message(lambda m: m.forward_from_chat and m.forward_from_chat.type == "channel")
 async def handle_forwarded_channel(message: types.Message, state):
     channel_id = message.forward_from_chat.id
@@ -47,39 +72,14 @@ async def handle_forwarded_channel(message: types.Message, state):
     )
     await state.set_state(ConnectStates.waiting_vk_token)
 
-# Вариант 2: ручная привязка через команду
-@dp.message(Command("link_channel"))
-async def link_channel_manual(message: types.Message):
-    args = message.text.strip().split()
-    if len(args) != 2:
-        await message.answer("❌ Используй: /link_channel <channel_id>")
-        return
-
-    try:
-        channel_id = int(args[1])
-    except ValueError:
-        await message.answer("❌ channel_id должен быть числом.")
-        return
-
-    user_id = message.from_user.id
-    user = get_user_tokens(user_id)
-    if not user:
-        await message.answer("❌ Сначала пройди настройку: /start")
-        return
-
-    save_user_tokens(
-        user_id=user_id,
-        vk_token=encrypt(user["vk_token"]),
-        group_id=user["vk_group_id"],
-        channel_id=channel_id
-    )
-
-    await message.answer(f"✅ Канал {channel_id} привязан! Репосты будут идти в VK.")
-
-# Заглушки для кнопок
+# 🔒 Заглушка для кнопки оплаты
 @dp.callback_query(lambda c: c.data == "pay")
 async def pay_callback(call: types.CallbackQuery):
-    await call.message.answer("💳 Оплата пока не подключена. 7 дней бесплатно.")
+    await call.message.answer(
+        "🔓 Бот сейчас условно бесплатный.\n\n"
+        "💡 В будущем будет символическая подписка.\n"
+        "📌 Поддержка проекта приветствуется, но не обязательна."
+    )
     await call.answer()
 
 @dp.callback_query(lambda c: c.data == "help")
@@ -89,7 +89,7 @@ async def help_callback(call: types.CallbackQuery):
         "1. Нажми «Подключить»\n"
         "2. Введи VK Community Token\n"
         "3. Укажи ID группы ВКонтакте\n"
-        "4. Перешли сообщение из канала или напиши /link_channel <channel_id>\n\n"
+        "4. Перешли сообщение из канала, где бот — админ\n\n"
         "После этого бот начнёт репостить из канала в VK."
     )
     await call.answer()
