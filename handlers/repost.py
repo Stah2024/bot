@@ -3,23 +3,16 @@ from aiogram import types
 from utils.vk_client import post_to_vk, upload_photo_to_vk, upload_video_to_vk
 from db.database import get_user_tokens
 from utils.crypto import decrypt
-from config import SUBSCRIPTION_CHANNELS  # ← ДОБАВЛЕНО: импортируем каналы подписки
 
 logger = logging.getLogger(__name__)
 
+# ИСПРАВЛЕНО: имя функции + параметр bot
 async def repost_channel_post(message: types.Message, bot):
-    channel_id = message.chat.id
+    logger.info(f"[REPOST] Получено сообщение из канала: {message.chat.id}")
 
-    # ИСКЛЮЧАЕМ КАНАЛЫ ПОДПИСКИ
-    if channel_id in SUBSCRIPTION_CHANNELS:
-        logger.info(f"[REPOST] Игнорируем канал подписки: {channel_id}")
-        return  # ← НИЧЕГО НЕ ДЕЛАЕМ
-
-    logger.info(f"[REPOST] Получено сообщение из канала: {channel_id}")
-
-    user_data = get_user_tokens(channel_id=channel_id)
+    user_data = get_user_tokens(channel_id=message.chat.id)
     if not user_data:
-        logger.warning(f"[REPOST] Нет токенов для канала {channel_id}")
+        logger.warning(f"[REPOST] Нет токенов для канала {message.chat.id}")
         return
 
     try:
