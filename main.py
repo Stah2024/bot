@@ -40,7 +40,7 @@ async def check_subscription(user_id: int) -> bool:
             if member.status not in ("member", "administrator", "creator"):
                 return False
         except Exception as e:
-            logging.warning(f"[SUBSCRIBE] Ошибка проверки канала {ch['id']}: {e}")
+            logging.warning(f"[SUBSCRIBE] Ошибка проверки {ch['id']}: {e}")
             return False
     return True
 
@@ -79,33 +79,36 @@ async def check_sub_callback(call: types.CallbackQuery):
 async def help_handler(call: types.CallbackQuery):
     help_text = (
         "Инструкция по подключению:\n\n"
-        "1. Создай приложение:\n"
-        "   → https://vk.com/apps?act=manage\n"
-        "   → «Создать» → «Сайт»\n"
-        "   → Название: любое\n"
-        "   → Адрес: https://example.com\n"
-        "   → Домен: example.com\n"
-        "   → Сохранить\n\n"
-        "2. Запиши ID приложения (например, 51778376)\n\n"
-        "3. Открой ссылку (замени ID):\n"
-        "   https://oauth.vk.com/authorize?client_id=51778376"
-        "&scope=wall,photos,video,docs,groups,offline"
-        "&response_type=token"
-        "&redirect_uri=https://oauth.vk.com/blank.html&v=5.199\n\n"
-        "4. Нажми «Разрешить»\n\n"
-        "5. Скопируй токен из URL:\n"
-        "   vk1.a.длинный_токен_до_&\n\n"
-        "6. Перешли любое сообщение из канала боту\n"
-        "7. Отправь токен → выбери группу → готово!\n\n"
+        "1. Добавь бота в **Telegram-канал** как админа (чтение + посты)\n"
+        "2. Перешли **любое сообщение из канала** в личку боту\n"
+        "3. Получи **токен VK**:\n"
+        "   → [Генератор токена за 30 сек](https://vkhost.github.io/)\n"
+        "   → Или создай приложение: https://vk.com/apps?act=manage\n"
+        "4. Пришли токен → выбери группу → готово\n\n"
         "Фото, видео, текст — будут в ВК!"
     )
-    await call.message.edit_text(help_text, parse_mode="Markdown", disable_web_page_preview=True)
+    await call.message.edit_text(
+        help_text,
+        parse_mode="Markdown",
+        disable_web_page_preview=True,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Назад", callback_data="back_to_menu")]
+        ])
+    )
+
+# === КНОПКА "Назад" ===
+@dp.callback_query(lambda c: c.data == "back_to_menu")
+async def back_to_menu(call: types.CallbackQuery):
+    await call.message.edit_text(
+        "Выбери действие:",
+        reply_markup=get_main_keyboard()
+    )
 
 # === ПОДКЛЮЧАЕМ ХЕНДЛЕРЫ ===
 dp.include_router(settings_router)
 dp.channel_post.register(repost_channel_post)
 
-# === ЗАПУкуда ===
+# === ЗАПУСК ===
 async def main():
     print("Bot started...")
     await dp.start_polling(bot)
