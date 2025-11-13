@@ -23,15 +23,12 @@ async def handle_forwarded_channel(message: types.Message, state: FSMContext):
     await state.clear()
     await state.update_data(channel_id=channel_id)
     await message.answer(
-        f"Канал `{channel_id}` обнаружен и привязан.\n\n"
-        "Теперь пришли **standalone-токен** (user access token):\n\n"
-        "1. https://vk.com/apps?act=manage → Создать → Web\n"
-        "2. Адрес: `https://example.com`, домен: `example.com`\n"
-        "3. Сохранить → запиши ID\n"
-        "4. Открой: https://oauth.vk.com/authorize?client_id=ТВОЙ_ID&scope=wall,photos,video,docs,groups,offline&response_type=token&redirect_uri=https://oauth.vk.com/blank.html&v=5.199\n"
-        "5. Разрешить → скопируй токен (vk1.a...)\n\n"
-        "Пришли его сюда:",
-        parse_mode="Markdown"
+        f"Отлично! Канал привязан.\n\n"
+        "Теперь пришли токен VK:\n"
+        "→ [Гайд: как получить токен за 1 минуту](https://teletype.in/@artstah/RQPCerHRJ3l)\n\n"
+        "Жду токен (vk1.a...)",
+        parse_mode="Markdown",
+        disable_web_page_preview=True
     )
     await state.set_state(ConnectStates.waiting_vk_token)
 
@@ -44,23 +41,23 @@ async def connect_callback(call: types.CallbackQuery, state: FSMContext):
         "Настройка подключения:\n\n"
         "1. Добавь бота в **Telegram-канал** как админа (чтение + посты)\n"
         "2. Перешли **любое сообщение из канала** в личку боту\n"
-        "3. Создай **standalone-токен**:\n"
-        "   → https://vk.com/apps?act=manage → Web → example.com\n"
-        "   → Получи токен по ссылке (vk1.a...)\n"
-        "4. Пришли токен → бот сам покажет твои группы\n"
-        "5. Выбери группу → готово\n\n"
-        "После этого репост с фото/видео будет работать!"
+        "3. Получи **токен VK** по гайду:\n"
+        "   → [Гайд: как получить токен](https://teletype.in/@artstah/RQPCerHRJ3l)\n"
+        "4. Пришли токен → выбери группу → готово\n\n"
+        "Репост с фото/видео будет работать!",
+        parse_mode="Markdown",
+        disable_web_page_preview=True
     )
     await call.answer()
 
 
-# Получение VK токена (standalone)
+# Получение VK токена
 @router.message(ConnectStates.waiting_vk_token)
 async def get_vk_token(message: types.Message, state: FSMContext):
     vk_token = message.text.strip()
     logger.info(f"[FSM] Получен VK токен от user {message.from_user.id}")
 
-    # Проверяем standalone-токен
+    # Проверяем токен
     check = validate_vk_token(vk_token)
     logger.info(f"[FSM] validate_vk_token: {check}")
 
@@ -75,7 +72,7 @@ async def get_vk_token(message: types.Message, state: FSMContext):
     # Сохраняем токен
     await state.update_data(vk_token=vk_token)
 
-    # Получаем группы, где пользователь — админ
+    # Получаем группы
     groups = check.get("groups", [])
     if not groups:
         await message.answer("Ты не админ ни в одной группе. Введи ID вручную (без -):")
@@ -83,7 +80,6 @@ async def get_vk_token(message: types.Message, state: FSMContext):
         return
 
     if len(groups) == 1:
-        # Одна группа — авто
         g = groups[0]
         await state.update_data(vk_group_id=f"-{g['id']}", group_name=g["name"])
         await message.answer(
@@ -92,7 +88,6 @@ async def get_vk_token(message: types.Message, state: FSMContext):
             parse_mode="Markdown"
         )
     else:
-        # Несколько групп — выбор
         kb = []
         for g in groups:
             kb.append([types.InlineKeyboardButton(
@@ -110,7 +105,7 @@ async def get_vk_token(message: types.Message, state: FSMContext):
     await state.set_state(ConnectStates.waiting_group_id)
 
 
-# Выбор группы из списка
+# Выбор группы
 @router.callback_query(lambda c: c.data.startswith("select_group:"))
 async def select_group(call: types.CallbackQuery, state: FSMContext):
     group_id = call.data.split(":")[1]
@@ -147,7 +142,6 @@ async def get_group_id(message: types.Message, state: FSMContext):
         await state.clear()
         return
 
-    # Авто-ID из токена
     auto_id = data.get("vk_group_id")
 
     try:
@@ -164,7 +158,7 @@ async def get_group_id(message: types.Message, state: FSMContext):
     await finalize_connection(message, state, group_id)
 
 
-# Финализация (общая функция)
+# Финализация
 async def finalize_connection(message: types.Message, state: FSMContext, group_id=None):
     data = await state.get_data()
     vk_token = data["vk_token"]
