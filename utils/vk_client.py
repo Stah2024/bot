@@ -138,7 +138,7 @@ def upload_video_to_vk(token: str, group_id: str | int, file_url: str) -> str | 
             params={
                 "group_id": group_id_str,
                 "name": "Репост из Telegram",
-                "wallpost": 1,
+                "wallpost": 0,  # ← отключаем автопубликацию
                 "access_token": token,
                 "v": VK_API_VERSION
             },
