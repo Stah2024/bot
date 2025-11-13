@@ -12,12 +12,20 @@ def validate_vk_token(token: str) -> dict:
             "https://api.vk.com/method/groups.getById",
             params={"access_token": token, "v": VK_API_VERSION},
             timeout=10
-        ).json()
+        )
 
-        print("[VK] validate_vk_token (сервисный) ответ:", response)
+        if response.status_code != 200:
+            return {"error": f"HTTP {response.status_code}"}
 
-        if "error" not in response and response.get("response", {}).get("groups"):
-            groups = response["response"]["groups"]
+        try:
+            data = response.json()
+        except ValueError:
+            return {"error": "Invalid JSON"}
+
+        print("[VK] validate_vk_token (сервисный) ответ:", data)
+
+        if "error" not in data and data.get("response", {}).get("groups"):
+            groups = data["response"]["groups"]
             if groups:
                 g = groups[0]
                 return {
@@ -38,15 +46,23 @@ def validate_vk_token(token: str) -> dict:
                 "fields": "name"
             },
             timeout=10
-        ).json()
+        )
 
-        print("[VK] validate_vk_token (standalone) ответ:", response)
+        if response.status_code != 200:
+            return {"error": f"HTTP {response.status_code}"}
 
-        if "error" in response:
-            err = response["error"]
+        try:
+            data = response.json()
+        except ValueError:
+            return {"error": "Invalid JSON"}
+
+        print("[VK] validate_vk_token (standalone) ответ:", data)
+
+        if "error" in data:
+            err = data["error"]
             return {"error": err.get("error_msg", "Unknown error")}
 
-        items = response.get("response", {}).get("items", [])
+        items = data.get("response", {}).get("items", [])
         if not items:
             return {"error": "Нет групп, где вы админ"}
 
@@ -67,7 +83,7 @@ def post_to_vk(token: str, group_id: str | int, text: str, attachments: list = N
     if attachments is None:
         attachments = []
 
-    group_id_str = str(group_id)  # ← Поддержка int и str
+    group_id_str = str(group_id)
 
     try:
         params = {
@@ -80,20 +96,33 @@ def post_to_vk(token: str, group_id: str | int, text: str, attachments: list = N
         if attachments:
             params["attachments"] = ",".join(attachments)
 
+        print("[VK] Публикуем пост с параметрами:", params)  # ОТЛАДКА
+
         response = requests.post(
             "https://api.vk.com/method/wall.post",
             params=params,
             timeout=15
-        ).json()
+        )
 
-        if "error" in response:
-            err = response["error"]
-            logging.error(f"[post_to_vk] Ошибка {err['error_code']}: {err['error_msg']}")
-        else:
-            post_id = response.get("response", {}).get("post_id")
-            logging.info(f"[post_to_vk] Успешно: post_id = {post_id}")
+        # === ПРОВЕРКА ОТВЕТА ===
+        if response.status_code != 200:
+            logging.error(f"[post_to_vk] HTTP {response.status_code}: {response.text}")
+            return {"error": f"HTTP {response.status_code}"}
 
-        return response
+        try:
+            data = response.json()
+        except ValueError:
+            logging.error(f"[post_to_vk] Не JSON: {response.text}")
+            return {"error": "Invalid JSON from VK"}
+
+        if "error" in data:
+            err = data["error"]
+            logging.error(f"[post_to_vk] VK Error {err['error_code']}: {err['error_msg']}")
+            return data
+
+        post_id = data.get("response", {}).get("post_id")
+        logging.info(f"[post_to_vk] Успешно: post_id = {post_id}")
+        return data
 
     except Exception as e:
         logging.error(f"[post_to_vk] Критическая ошибка: {e}")
@@ -102,7 +131,7 @@ def post_to_vk(token: str, group_id: str | int, text: str, attachments: list = N
 
 def upload_photo_to_vk(token: str, group_id: str | int, file_url: str) -> str | None:
     """Загружает фото из URL → возвращает 'photo123_456'"""
-    group_id_str = str(group_id).lstrip("-")  # ← Безопасно: int → str → lstrip
+    group_id_str = str(group_id).lstrip("-")
 
     try:
         # 1. Получаем сервер
@@ -114,15 +143,24 @@ def upload_photo_to_vk(token: str, group_id: str | int, file_url: str) -> str | 
                 "v": VK_API_VERSION
             },
             timeout=10
-        ).json()
+        )
 
-        if "error" in upload_server_resp:
-            logging.error(f"[upload_photo] Ошибка getWallUploadServer: {upload_server_resp['error']}")
+        if upload_server_resp.status_code != 200:
+            logging.error(f"[upload_photo] HTTP {upload_server_resp.status_code}")
             return None
 
-        upload_url = upload_server_resp["response"]["upload_url"]
+        try:
+            data = upload_server_resp.json()
+        except ValueError:
+            return None
 
-        # 2. Скачиваем фото из TG
+        if "error" in data:
+            logging.error(f"[upload_photo] Ошибка getWallUploadServer: {data['error']}")
+            return None
+
+        upload_url = data["response"]["upload_url"]
+
+        # 2. Скачиваем фото
         photo_data = requests.get(file_url, timeout=15).content
         if not photo_data:
             logging.warning("[upload_photo] Фото пустое")
@@ -133,10 +171,19 @@ def upload_photo_to_vk(token: str, group_id: str | int, file_url: str) -> str | 
             upload_url,
             files={"photo": ("photo.jpg", photo_data, "image/jpeg")},
             timeout=15
-        ).json()
+        )
 
-        if "photo" not in upload_resp:
-            logging.error(f"[upload_photo] Ошибка загрузки: {upload_resp}")
+        if upload_resp.status_code != 200:
+            logging.error(f"[upload_photo] Загрузка: {upload_resp.text}")
+            return None
+
+        try:
+            upload_data = upload_resp.json()
+        except ValueError:
+            return None
+
+        if "photo" not in upload_data:
+            logging.error(f"[upload_photo] Ошибка загрузки: {upload_data}")
             return None
 
         # 4. Сохраняем
@@ -144,20 +191,29 @@ def upload_photo_to_vk(token: str, group_id: str | int, file_url: str) -> str | 
             "https://api.vk.com/method/photos.saveWallPhoto",
             params={
                 "group_id": group_id_str,
-                "photo": upload_resp["photo"],
-                "server": upload_resp["server"],
-                "hash": upload_resp["hash"],
+                "photo": upload_data["photo"],
+                "server": upload_data["server"],
+                "hash": upload_data["hash"],
                 "access_token": token,
                 "v": VK_API_VERSION
             },
             timeout=10
-        ).json()
+        )
 
-        if "error" in save_resp:
-            logging.error(f"[upload_photo] Ошибка saveWallPhoto: {save_resp['error']}")
+        if save_resp.status_code != 200:
+            logging.error(f"[upload_photo] saveWallPhoto HTTP {save_resp.status_code}")
             return None
 
-        photo = save_resp["response"][0]
+        try:
+            save_data = save_resp.json()
+        except ValueError:
+            return None
+
+        if "error" in save_data:
+            logging.error(f"[upload_photo] Ошибка saveWallPhoto: {save_data['error']}")
+            return None
+
+        photo = save_data["response"][0]
         photo_id = f"photo{photo['owner_id']}_{photo['id']}"
         logging.info(f"[upload_photo] Успешно: {photo_id}")
         return photo_id
@@ -169,7 +225,7 @@ def upload_photo_to_vk(token: str, group_id: str | int, file_url: str) -> str | 
 
 def upload_video_to_vk(token: str, group_id: str | int, file_url: str) -> str | None:
     """Загружает видео из URL → возвращает 'video123_456'"""
-    group_id_str = str(group_id).lstrip("-")  # ← Безопасно: int → str → lstrip
+    group_id_str = str(group_id).lstrip("-")
 
     try:
         # 1. Получаем upload_url
@@ -183,17 +239,26 @@ def upload_video_to_vk(token: str, group_id: str | int, file_url: str) -> str | 
                 "v": VK_API_VERSION
             },
             timeout=10
-        ).json()
+        )
 
-        if "error" in save_resp:
-            logging.error(f"[upload_video] Ошибка video.save: {save_resp['error']}")
+        if save_resp.status_code != 200:
+            logging.error(f"[upload_video] HTTP {save_resp.status_code}")
             return None
 
-        upload_url = save_resp["response"]["upload_url"]
+        try:
+            save_data = save_resp.json()
+        except ValueError:
+            return None
+
+        if "error" in save_data:
+            logging.error(f"[upload_video] Ошибка video.save: {save_data['error']}")
+            return None
+
+        upload_url = save_data["response"]["upload_url"]
 
         # 2. Скачиваем видео
         video_data = requests.get(file_url, timeout=30).content
-        if len(video_data) > 25 * 1024 * 1024:  # >25MB
+        if len(video_data) > 25 * 1024 * 1024:
             logging.warning("[upload_video] Видео >25MB — пропускаем")
             return None
 
@@ -209,8 +274,8 @@ def upload_video_to_vk(token: str, group_id: str | int, file_url: str) -> str | 
             return None
 
         # 4. Берём ID
-        owner_id = save_resp["response"]["owner_id"]
-        video_id = save_resp["response"]["video_id"]
+        owner_id = save_data["response"]["owner_id"]
+        video_id = save_data["response"]["video_id"]
         video_str = f"video{owner_id}_{video_id}"
         logging.info(f"[upload_video] Успешно: {video_str}")
         return video_str
