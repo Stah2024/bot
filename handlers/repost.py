@@ -1,7 +1,7 @@
 import logging
 from aiogram import types
 from utils.vk_client import post_to_vk, upload_photo_to_vk, upload_video_to_vk
-from db.database import get_user_tokens
+from db.database import get_user_tokens_by_channel
 from utils.crypto import decrypt
 
 logger = logging.getLogger(__name__)
@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 async def repost_channel_post(message: types.Message, bot):
     logger.info(f"[REPOST] Получено сообщение из канала: {message.chat.id}")
 
-    user_data = get_user_tokens(channel_id=message.chat.id)
+    user_data = get_user_tokens_by_channel(channel_id=message.chat.id)
     if not user_data:
         logger.warning(f"[REPOST] Нет токенов для канала {message.chat.id}")
         return
@@ -20,7 +20,7 @@ async def repost_channel_post(message: types.Message, bot):
         logger.error(f"[REPOST] Ошибка расшифровки токена: {e}")
         return
 
-    group_id = user_data["group_id"]
+    group_id = user_data["vk_group_id"]
     logger.info(f"[GROUP] VK Group ID: {group_id}")
 
     # === ТЕКСТ ===
