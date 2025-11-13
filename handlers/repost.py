@@ -84,4 +84,4 @@ async def repost_channel_post(message: types.Message, bot):
             post_id = response.get("response", {}).get("post_id")
             logger.info(f"[VK] Успешно! post_id = {post_id}")
     except Exception as e:
-        logger.error(f"[VK] Критическая ошибка: {e}") 
+        logger.error(f"[VK] Критическая ошибка: {e}")
