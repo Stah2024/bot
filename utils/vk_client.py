@@ -4,10 +4,11 @@ import logging
 VK_API_VERSION = "5.199"
 logging.basicConfig(level=logging.INFO)
 
+
 def validate_vk_token(token: str) -> dict:
     """Проверяет любой токен: сервисный (Community) или standalone (User)"""
     try:
-        # === 1. Пробуем как СЕРВИСНЫЙ токен (groups.getById без group_ids) ===
+        # === 1. Пробуем как СЕРВИСНЫЙ токен (groups.getById) ===
         response = requests.get(
             "https://api.vk.com/method/groups.getById",
             params={"access_token": token, "v": VK_API_VERSION},
@@ -79,14 +80,14 @@ def validate_vk_token(token: str) -> dict:
 
 
 def post_to_vk(token: str, group_id: str | int, text: str, attachments: list = None) -> dict:
-    """Публикует пост в VK. attachments — список строк типа 'photo123_456'"""
+    """Публикует пост в VK через POST (избегаем 414)"""
     if attachments is None:
         attachments = []
 
     group_id_str = str(group_id)
 
     try:
-        params = {
+        data = {
             "owner_id": group_id_str,
             "from_group": 1,
             "message": text[:4096],
@@ -94,35 +95,34 @@ def post_to_vk(token: str, group_id: str | int, text: str, attachments: list = N
             "v": VK_API_VERSION
         }
         if attachments:
-            params["attachments"] = ",".join(attachments)
+            data["attachments"] = ",".join(attachments)
 
-        print("[VK] Публикуем пост с параметрами:", params)  # ОТЛАДКА
+        print("[VK] Публикуем пост (POST):", data)
 
         response = requests.post(
             "https://api.vk.com/method/wall.post",
-            params=params,
+            data=data,  # POST, не params!
             timeout=15
         )
 
-        # === ПРОВЕРКА ОТВЕТА ===
         if response.status_code != 200:
             logging.error(f"[post_to_vk] HTTP {response.status_code}: {response.text}")
             return {"error": f"HTTP {response.status_code}"}
 
         try:
-            data = response.json()
+            result = response.json()
         except ValueError:
             logging.error(f"[post_to_vk] Не JSON: {response.text}")
             return {"error": "Invalid JSON from VK"}
 
-        if "error" in data:
-            err = data["error"]
+        if "error" in result:
+            err = result["error"]
             logging.error(f"[post_to_vk] VK Error {err['error_code']}: {err['error_msg']}")
-            return data
+            return result
 
-        post_id = data.get("response", {}).get("post_id")
+        post_id = result.get("response", {}).get("post_id")
         logging.info(f"[post_to_vk] Успешно: post_id = {post_id}")
-        return data
+        return result
 
     except Exception as e:
         logging.error(f"[post_to_vk] Критическая ошибка: {e}")
@@ -281,5 +281,5 @@ def upload_video_to_vk(token: str, group_id: str | int, file_url: str) -> str | 
         return video_str
 
     except Exception as e:
-        logging.error(f"[upload_video_to_vk] Критическая ошибка: {e}")
+        logging.error(f"[upload_video_to_vk] Критическая ошибка:ed: {e}")
         return None
