@@ -52,6 +52,7 @@ async def repost_channel_post(message: types.Message, bot):
             file_url = f"https://api.telegram.org/file/bot{bot.token}/{file_path}"
             logger.info(f"[VIDEO] Загружаем: {file_url}")
 
+            # ВАЖНО: видео загружается без wallpost=1, чтобы избежать автопоста
             video_id = upload_video_to_vk(vk_token, group_id, file_url)
             if video_id:
                 attachments.append(video_id)
