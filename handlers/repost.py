@@ -6,7 +6,6 @@ from utils.crypto import decrypt
 
 logger = logging.getLogger(__name__)
 
-# ИСПРАВЛЕНО: имя функции + параметр bot
 async def repost_channel_post(message: types.Message, bot):
     logger.info(f"[REPOST] Получено сообщение из канала: {message.chat.id}")
 
@@ -37,7 +36,8 @@ async def repost_channel_post(message: types.Message, bot):
         try:
             photo = message.photo[-1]
             file = await bot.get_file(photo.file_id)
-            file_url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
+            file_path = file.file_path
+            file_url = f"https://api.telegram.org/file/bot{bot.token}/{file_path}"
             logger.info(f"[PHOTO] Загружаем: {file_url}")
 
             photo_id = upload_photo_to_vk(vk_token, group_id, file_url)
@@ -47,14 +47,15 @@ async def repost_channel_post(message: types.Message, bot):
             else:
                 logger.warning("[PHOTO] Не удалось загрузить")
         except Exception as e:
-            logger.error(f"[PHOTO] Ошибка: {e}")
+            logger.exception(f"[PHOTO] Ошибка загрузки: {e}")
 
     # === ВИДЕО ===
     if message.video:
         try:
             video = message.video
             file = await bot.get_file(video.file_id)
-            file_url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
+            file_path = file.file_path
+            file_url = f"https://api.telegram.org/file/bot{bot.token}/{file_path}"
             logger.info(f"[VIDEO] Загружаем: {file_url}")
 
             video_id = upload_video_to_vk(vk_token, group_id, file_url)
@@ -64,17 +65,21 @@ async def repost_channel_post(message: types.Message, bot):
             else:
                 logger.warning("[VIDEO] Не удалось загрузить")
         except Exception as e:
-            logger.error(f"[VIDEO] Ошибка: {e}")
+            logger.exception(f"[VIDEO] Ошибка загрузки: {e}")
 
     # === ПУБЛИКАЦИЯ ===
+    if not text and not attachments:
+        logger.warning("[VK] Нет контента для публикации (ни текста, ни вложений)")
+        return
+
     logger.info(f"[VK] Публикуем: {len(text)} символов, вложений: {len(attachments)}")
 
     try:
         response = post_to_vk(vk_token, group_id, text, attachments)
         if "error" in response:
-            logger.error(f"[VK] Ошибка: {response['error']}")
+            logger.error(f"[VK] Ошибка публикации: {response['error']}")
         else:
             post_id = response.get("response", {}).get("post_id")
-            logger.info(f"[VK] Успешно! post_id = {post_id}")
+            logger.info(f"[VK] Успешно опубликовано! post_id = {post_id}")
     except Exception as e:
-        logger.error(f"[VK] Критическая ошибка: {e}")
+        logger.exception(f"[VK] Критическая ошибка при публикации: {e}")
