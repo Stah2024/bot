@@ -1,73 +1,81 @@
-from aiogram import types, Bot
-from config import BOT_TOKEN
-from db.database import get_user_tokens_by_channel
-from utils.vk_client import post_to_vk, upload_photo_to_vk, upload_video_to_vk
 import logging
+from aiogram import types
+from utils.vk_client import post_to_vk, upload_photo_to_vk, upload_video_to_vk
+from db.database import get_user_tokens
+from utils.crypto import decrypt
 
-bot = Bot(token=BOT_TOKEN)
-logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-async def repost_channel_post(message: types.Message):
-    print("[REPOST] Получено сообщение из канала:", message.chat.id)
+async def repost_channelніше_post(message: types.Message, bot):
+    logger.info(f"[REPOST] Получено сообщение из канала: {message.chat.id}")
 
-    user = get_user_tokens_by_channel(message.chat.id)
-    if not user:
-        print("[REPOST] Нет токенов для chat.id =", message.chat.id)
+    user_data = get_user_tokens(channel_id=message.chat.id)
+    if not user_data:
+        logger.warning(f"[REPOST] Нет токенов для канала {message.chat.id}")
         return
 
-    # Standalone-токен — уже расшифрован в БД
-    vk_token = user["vk_token"]
-    # group_id хранится как строка с минусом: "-12345678"
-    group_id = user["vk_group_id"]  # ← ОСТАВЛЯЕМ СТРОКОЙ С МИНУСОМ!
-    print("[TOKENS] VK:", vk_token)
-    print("[GROUP] VK Group ID:", group_id)
+    try:
+        vk_token = decrypt(user_data["vk_token"])
+    except Exception as e:
+        logger.error(f"[REPOST] Ошибка расшифровки токена: {e}")
+        return
 
-    # Текст
+    group_id = user_data["group_id"]  # ← СТРОКА С МИНУСОМ: "-12345678"
+    logger.info(f"[TOKENS] VK токен расшифрован")
+    logger.info(f"[GROUP] VK Group ID: {group_id}")
+
+    # === ТЕКСТ ===
     text = (message.text or message.caption or "").strip()
     if len(text) > 4096:
         text = text[:4093] + "..."
-        print("[TEXT] Обрезан до 4096 символов")
+        logger.info("[TEXT] Обрезан до 4096 символов")
 
     attachments = []
 
     # === ФОТО ===
     if message.photo:
         try:
-            file = await bot.get_file(message.photo[-1].file_id)
-            file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file.file_path}"
-            print("[PHOTO] Загружаем фото:", file_url)
+            photo = message.photo[-1]
+            file = await bot.get_file(photo.file_id)
+            file_url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
+            logger.info(f"[PHOTO] Загружаем: {file_url}")
 
             photo_id = upload_photo_to_vk(vk_token, group_id, file_url)
             if photo_id:
-                print("[PHOTO] Успешно:", photo_id)
                 attachments.append(photo_id)
+                logger.info(f"[PHOTO] Успешно: {photo_id}")
             else:
-                print("[PHOTO] Ошибка — пропускаем")
+                logger.warning("[PHOTO] Не удалось загрузить")
         except Exception as e:
-            logging.error(f"[PHOTO] Ошибка: {e}")
+            logger.error(f"[PHOTO] Ошибка: {e}")
 
     # === ВИДЕО ===
     if message.video:
         try:
-            file = await bot.get_file(message.video.file_id)
-            file_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file.file_path}"
-            print("[VIDEO] Загружаем видео:", file_url)
+            video = message.video
+            file = await bot.get_file(video.file_id)
+            file_url = f"https://api.telegram.org/file/bot{bot.token}/{file.file_path}"
+            logger.info(f"[VIDEO] Загружаем: {file_url}")
 
             video_id = upload_video_to_vk(vk_token, group_id, file_url)
             if video_id:
-                print("[VIDEO] Успешно:", video_id)
                 attachments.append(video_id)
+                logger.info(f"[VIDEO] Успешно: {video_id}")
             else:
-                print("[VIDEO] Ошибка — пропускаем")
+                logger.warning("[VIDEO] Не удалось загрузить")
         except Exception as e:
-            logging.error(f"[VIDEO] Ошибка: {e}")
+            logger.error(f"[VIDEO] Ошибка: {e}")
 
-    print("[VK] Публикуем:", text)
-    print("[VK] Вложения:", attachments)
+    # === ПУБЛИКАЦИЯ ===
+    logger.info(f"[VK] Публикуем текст: {len(text)} символов")
+    logger.info(f"[VK] Вложения: {attachments}")
 
-    # Публикация
     try:
         response = post_to_vk(vk_token, group_id, text, attachments)
-        print("[VK] Ответ:", response)
+        if "error" in response:
+            logger.error(f"[VK] Ошибка: {response['error']}")
+        else:
+            post_id = response.get("response", {}).get("post_id")
+            logger.info(f"[VK] Успешно! post_id = {post_id}")
     except Exception as e:
-        logging.error(f"[VK] Публикация не удалась: {e}")
+        logger.error(f"[VK] Критическая ошибка: {e}")
