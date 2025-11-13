@@ -6,7 +6,8 @@ from utils.crypto import decrypt
 
 logger = logging.getLogger(__name__)
 
-async def repost_channelніше_post(message: types.Message, bot):
+# ИСПРАВЛЕНО: имя функции + параметр bot
+async def repost_channel_post(message: types.Message, bot):
     logger.info(f"[REPOST] Получено сообщение из канала: {message.chat.id}")
 
     user_data = get_user_tokens(channel_id=message.chat.id)
@@ -20,8 +21,7 @@ async def repost_channelніше_post(message: types.Message, bot):
         logger.error(f"[REPOST] Ошибка расшифровки токена: {e}")
         return
 
-    group_id = user_data["group_id"]  # ← СТРОКА С МИНУСОМ: "-12345678"
-    logger.info(f"[TOKENS] VK токен расшифрован")
+    group_id = user_data["group_id"]
     logger.info(f"[GROUP] VK Group ID: {group_id}")
 
     # === ТЕКСТ ===
@@ -67,8 +67,7 @@ async def repost_channelніше_post(message: types.Message, bot):
             logger.error(f"[VIDEO] Ошибка: {e}")
 
     # === ПУБЛИКАЦИЯ ===
-    logger.info(f"[VK] Публикуем текст: {len(text)} символов")
-    logger.info(f"[VK] Вложения: {attachments}")
+    logger.info(f"[VK] Публикуем: {len(text)} символов, вложений: {len(attachments)}")
 
     try:
         response = post_to_vk(vk_token, group_id, text, attachments)
