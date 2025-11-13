@@ -12,13 +12,9 @@ if not BOT_TOKEN:
 CRYPTO_KEY = os.getenv("CRYPTO_KEY")
 if not CRYPTO_KEY:
     raise ValueError("CRYPTO_KEY не найден в .env")
+
+# Приводим ключ к bytes (для cryptography)
 try:
     CRYPTO_KEY = CRYPTO_KEY.encode()  # ← bytes, как нужно
 except Exception as e:
     raise ValueError(f"CRYPTO_KEY должен быть строкой: {e}")
-
-# === КАНАЛЫ ПОДПИСКИ — НЕ РЕПОСТИТЬ ОТСЮДА! ===
-SUBSCRIPTION_CHANNELS = [
-    -1001792603455,  # @newsSVOih
-    -1003347493013,  # @bot_tg2vc
-]
