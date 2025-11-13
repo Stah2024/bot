@@ -77,20 +77,27 @@ async def check_sub_callback(call: types.CallbackQuery):
 # === КНОПКА "Инструкция" ===
 @dp.callback_query(lambda c: c.data == "help")
 async def help_handler(call: types.CallbackQuery):
-    help_text = (
-        "Инструкция по подключению:\n\n"
-        "1. Добавь бота в **Telegram-канал** как админа (чтение + посты)\n"
-        "2. Перешли **любое сообщение из канала** в личку боту\n"
-        "3. Получи **токен VK**:\n"
-        "   → [Генератор токена за 30 сек](https://vkhost.github.io/)\n"
-        "   → Или создай приложение: https://vk.com/apps?act=manage\n"
-        "4. Пришли токен → выбери группу → готово\n\n"
-        "Фото, видео, текст — будут в ВК!"
-    )
     await call.message.edit_text(
-        help_text,
+        "Полный гайд по подключению:\n\n"
+        "[Гайд: как настроить репост TG → VK](https://teletype.in/@artstah/RQPCerHRJ3l)\n\n"
+        "1. Добавь бота в канал как админа\n"
+        "2. Перешли любое сообщение\n"
+        "3. Получи токен по гайду\n"
+        "4. Пришли токен → выбери группу",
         parse_mode="Markdown",
         disable_web_page_preview=True,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Назад", callback_data="back_to_menu")]
+        ])
+    )
+
+# === КНОПКА "Поддержка" ===
+@dp.callback_query(lambda c: c.data == "support")
+async def support_handler(call: types.CallbackQuery):
+    await call.message.edit_text(
+        "Поддержка:\n\n"
+        "По всем вопросам — @artstah\n"
+        "Пиши в личку, помогу с настройкой!",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="Назад", callback_data="back_to_menu")]
         ])
@@ -103,6 +110,29 @@ async def back_to_menu(call: types.CallbackQuery):
         "Выбери действие:",
         reply_markup=get_main_keyboard()
     )
+
+# === ЛОВИМ ОШИБКИ И ШЛЁМ ТЕБЕ ===
+YOUR_ID = 5127280245  # ← ЗАМЕ BIT НА СВОЙ ID (узнай через @userinfobot)
+
+@dp.errors()
+async def error_handler(event: types.ErrorEvent):
+    error = event.exception
+    user = None
+    if event.update.message:
+        user = event.update.message.from_user
+    elif event.update.callback_query:
+        user = event.update.callback_query.from_user
+
+    text = (
+        f"ОШИБКА В БОТЕ\n\n"
+        f"Пользователь: {user.full_name if user else 'Неизвестно'} (@{user.username if user else '—'}) ID: {user.id if user else '—'}\n"
+        f"Ошибка: {error}\n"
+        f"Тип: {type(error).__name__}"
+    )
+    try:
+        await bot.send_message(YOUR_ID, text)
+    except:
+        pass
 
 # === ПОДКЛЮЧАЕМ ХЕНДЛЕРЫ ===
 dp.include_router(settings_router)
