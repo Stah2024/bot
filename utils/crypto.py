@@ -1,8 +1,7 @@
 from cryptography.fernet import Fernet
-from config import CRYPTO_KEY  # ← CRYPTO_KEY уже bytes!
+from config import CRYPTO_KEY
 
-# ← УБРАЛ .encode()! ОШИБКА БЫЛА ЗДЕСЬ
-fernet = Fernet(CRYPTO_KEY)
+fernet = Fernet(CRYPTO_KEY.encode())
 
 def encrypt(text: str) -> bytes:
     return fernet.encrypt(text.encode())
