@@ -9,12 +9,14 @@ if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не найден в .env")
 
 # === КЛЮЧ ШИФРОВАНИЯ ===
-CRYPTO_KEY = os.getenv("CRYPTO_KEY")
-if not CRYPTO_KEY:
+raw_key = os.getenv("CRYPTO_KEY")
+if not raw_key:
     raise ValueError("CRYPTO_KEY не найден в .env")
 
 # Приводим ключ к bytes (для cryptography)
-try:
-    CRYPTO_KEY = CRYPTO_KEY.encode()  # ← bytes, как нужно
-except Exception as e:
-    raise ValueError(f"CRYPTO_KEY должен быть строкой: {e}")
+if isinstance(raw_key, str):
+    CRYPTO_KEY = raw_key.encode()
+elif isinstance(raw_key, bytes):
+    CRYPTO_KEY = raw_key
+else:
+    raise TypeError("CRYPTO_KEY должен быть строкой или байтами")
