@@ -10,8 +10,8 @@ class UserConnection(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    # Telegram user ID
-    telegram_id = Column(BigInteger, nullable=False, unique=True, index=True)
+    # Telegram user ID (может повторяться для разных каналов, используется для проверки подписки и оплаты)
+    telegram_id = Column(BigInteger, nullable=False, index=True)
 
     # VK токен (зашифрованный)
     vk_token = Column(LargeBinary, nullable=False)
@@ -19,8 +19,8 @@ class UserConnection(Base):
     # VK group ID (строка с минусом)
     vk_group_id = Column(String, nullable=False)
 
-    # Telegram channel ID (откуда идёт репост)
-    channel_id = Column(BigInteger, nullable=True, unique=True, index=True)
+    # Telegram channel ID (откуда идёт репост) — уникален
+    channel_id = Column(BigInteger, nullable=False, unique=True, index=True)
 
     # Дата создания записи
     created_at = Column(DateTime, default=datetime.utcnow)
