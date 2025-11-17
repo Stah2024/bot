@@ -57,10 +57,18 @@ def post_to_vk(token: str, group_id: str | int, text: str, attachments: list = N
         attachments = []
     group_id_str = str(group_id)
     try:
+        # гарантируем, что text всегда строка
+        safe_text = ""
+        if text:
+            if isinstance(text, list):
+                safe_text = " ".join(str(x) for x in text)
+            else:
+                safe_text = str(text)
+
         data = {
-            "owner_id": group_id_str,
+            "owner_id": group_id_str if str(group_id_str).startswith("-") else f"-{group_id_str}",
             "from_group": 1,
-            "message": text[:4096],
+            "message": safe_text[:4096],
             "access_token": token,
             "v": VK_API_VERSION
         }
