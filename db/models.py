@@ -1,32 +1,29 @@
-from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import Column, Integer, String, LargeBinary, DateTime, BigInteger
-from datetime import datetime, timedelta
+# db/models.py
+from sqlalchemy import (
+    Column, Integer, BigInteger, Text, DateTime, Boolean, ForeignKey
+)
+from sqlalchemy.ext.declarative import declarative_base
+from datetime import datetime
 
-class Base(DeclarativeBase):
-    pass
+Base = declarative_base()
 
-class UserConnection(Base):
-    __tablename__ = "user_connections"
+class User(Base):
+    __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
-
-    # Telegram user ID (может повторяться для разных каналов, используется для проверки подписки и оплаты)
-    telegram_id = Column(BigInteger, nullable=False, index=True)
-
-    # VK токен (зашифрованный)
-    vk_token = Column(LargeBinary, nullable=False)
-
-    # VK group ID (строка с минусом)
-    vk_group_id = Column(String, nullable=False)
-
-    # Telegram channel ID (откуда идёт репост) — уникален
-    channel_id = Column(BigInteger, nullable=False, unique=True, index=True)
-
-    # Дата создания записи
+    telegram_id = Column(BigInteger, primary_key=True)
+    vk_token = Column(Text, nullable=True)           # один токен на пользователя
     created_at = Column(DateTime, default=datetime.utcnow)
+    paid_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
 
-    # Дата оплаты
-    paid_at = Column(DateTime, default=datetime.utcnow)
 
-    # Срок действия подписки
-    expires_at = Column(DateTime, default=lambda: datetime.utcnow() + timedelta(days=7))
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    telegram_id = Column(BigInteger, ForeignKey("users.telegram_id"), nullable=False, index=True)
+    tg_channel_id = Column(BigInteger, nullable=False)      # откуда берём посты
+    vk_group_id = Column(BigInteger, nullable=False)        # отрицательное число = группа ВК
+    vk_group_name = Column(Text, nullable=True)             # для красоты в /list
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
