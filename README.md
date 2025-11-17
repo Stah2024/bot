@@ -21,9 +21,9 @@ pm2 save
 
 .env пример
 BOT_TOKEN=8246854614:AAE...
-CRYPTO_KEY=g5KpL9vXz8mN3qRt7wY2aBcDeFgHiJkLmNoPqRsTuVw=
+CRYPTO_KEY=g53q.................uVw=
 
-Сайты, [17.11.2025 13:23]
 Поддержка / премиум telegram
 @artstah — установка под ключ
+
 ⭐ Star репозиторию, если понравилось
