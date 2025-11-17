@@ -1,13 +1,14 @@
-from aiogram import types, Router, Bot
+# handlers/settings.py
+from aiogram import types, Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from utils.crypto import encrypt
 from utils.vk_client import validate_vk_token
-from db.database import save_user_tokens
+from db.database import save_or_update_user, add_subscription
 import logging
 
 logger = logging.getLogger(__name__)
 router = Router()
+
 
 class ConnectStates(StatesGroup):
     waiting_vk_token = State()
@@ -15,7 +16,7 @@ class ConnectStates(StatesGroup):
 
 
 # Привязка канала через пересланное сообщение
-@router.message(lambda m: m.forward_from_chat and m.forward_from_chat.type == "channel")
+@router.message(F.forward_from_chat & F.forward_from_chat.type == "channel")
 async def handle_forwarded_channel(message: types.Message, state: FSMContext):
     channel_id = message.forward_from_chat.id
     user_id = message.from_user.id
@@ -34,7 +35,7 @@ async def handle_forwarded_channel(message: types.Message, state: FSMContext):
 
 
 # Кнопка "Подключить"
-@router.callback_query(lambda c: c.data == "connect")
+@router.callback_query(F.data == "connect")
 async def connect_callback(call: types.CallbackQuery, state: FSMContext):
     await state.clear()
     await call.message.answer(
@@ -57,7 +58,6 @@ async def get_vk_token(message: types.Message, state: FSMContext):
     vk_token = message.text.strip()
     logger.info(f"[FSM] Получен VK токен от user {message.from_user.id}")
 
-    # Проверяем токен
     check = validate_vk_token(vk_token)
     logger.info(f"[FSM] validate_vk_token: {check}")
 
@@ -69,10 +69,8 @@ async def get_vk_token(message: types.Message, state: FSMContext):
         )
         return
 
-    # Сохраняем токен
     await state.update_data(vk_token=vk_token)
 
-    # Получаем группы
     groups = check.get("groups", [])
     if not groups:
         await message.answer("Ты не админ ни в одной группе. Введи ID вручную (без -):")
@@ -96,41 +94,38 @@ async def get_vk_token(message: types.Message, state: FSMContext):
             )])
         kb.append([types.InlineKeyboardButton(text="Ввести вручную", callback_data="manual_group")])
         keyboard = types.InlineKeyboardMarkup(inline_keyboard=kb)
-        await message.answer(
-            "Выбери группу для репоста:",
-            reply_markup=keyboard
-        )
+        await message.answer("Выбери группу для репоста:", reply_markup=keyboard)
         await state.update_data(available_groups=groups)
 
     await state.set_state(ConnectStates.waiting_group_id)
 
 
-# Выбор группы
-@router.callback_query(lambda c: c.data.startswith("select_group:"))
+# Выбор группы через кнопку
+@router.callback_query(F.data.startswith("select_group:"))
 async def select_group(call: types.CallbackQuery, state: FSMContext):
     group_id = call.data.split(":")[1]
     data = await state.get_data()
     groups = data.get("available_groups", [])
-    group = next((g for g in groups if g["id"] == group_id), None)
+    group = next((g for g in groups if str(g['id']) == group_id), None)
     if group:
         await state.update_data(vk_group_id=f"-{group_id}", group_name=group["name"])
         await call.message.edit_text(
-            f"Выбрана: `{group['name']}` (ID: {group_id})\n\n"
-            "Теперь всё готово!",
+            f"Выбрана группа: `{group['name']}` (ID: {group_id})\n\n"
+            "Готово! Репосты включены.",
             parse_mode="Markdown"
         )
     await call.answer()
     await finalize_connection(call.message, state)
 
 
-# Ввод вручную
-@router.callback_query(lambda c: c.data == "manual_group")
+# Ввод группы вручную
+@router.callback_query(F.data == "manual_group")
 async def manual_group(call: types.CallbackQuery):
-    await call.message.edit_text("Введи ID группы ВК вручную (без -):")
+    await call.message.edit_text("Введи ID группы ВК вручную (цифры без -):")
     await call.answer()
 
 
-# Получение group_id и сохранение
+# Получение group_id (вручную или подтверждение)
 @router.message(ConnectStates.waiting_group_id)
 async def get_group_id(message: types.Message, state: FSMContext):
     data = await state.get_data()
@@ -138,51 +133,64 @@ async def get_group_id(message: types.Message, state: FSMContext):
     channel_id = data.get("channel_id")
 
     if not vk_token or not channel_id:
-        await message.answer("Ошибка: данные потеряны. Начни заново.")
+        await message.answer("Ошибка: данные потерялись. Начни заново с кнопки «Подключить»")
         await state.clear()
         return
 
     auto_id = data.get("vk_group_id")
 
     try:
-        input_text = message.text.strip()
-        if input_text.lower() in ["да", "ok", "подтвердить"] and auto_id:
+        text = message.text.strip().lower()
+        if text in ["да", "ok", "подтвердить", "yes", "готово"] and auto_id:
             group_id = auto_id
+            group_name = data.get("group_name", "Моя группа")
         else:
-            raw_id = int(input_text)
+            raw_id = int(text)
             group_id = f"-{raw_id}"
+            group_name = f"Группа {raw_id}"
     except ValueError:
-        await message.answer("ID должен быть числом. Попробуй ещё:")
+        await message.answer("ID должен быть числом. Попробуй ещё раз:")
         return
 
-    await finalize_connection(message, state, group_id)
+    await state.update_data(vk_group_id=group_id, group_name=group_name)
+    await finalize_connection(message, state)
 
 
-# Финализация
-async def finalize_connection(message: types.Message, state: FSMContext, group_id=None):
+# Финализация — сохранение токена + добавление подписки
+async def finalize_connection(message: types.Message, state: FSMContext):
     data = await state.get_data()
+    user_id = message.from_user.id
     vk_token = data["vk_token"]
     channel_id = data["channel_id"]
-    group_id = group_id or data.get("vk_group_id")
+    group_id = data["vk_group_id"]
+    group_name = data.get("group_name", "Группа ВК")
 
     try:
-        encrypted_token = encrypt(vk_token)
-        save_user_tokens(
-            user_id=message.from_user.id,
-            vk_token=encrypted_token,
-            group_id=group_id,
-            channel_id=channel_id
+        # 1. Сохраняем/обновляем токен (один на пользователя)
+        save_or_update_user(user_id, vk_token)
+
+        # 2. Добавляем подписку (можно сколько угодно)
+        success = add_subscription(
+            telegram_id=user_id,
+            tg_channel_id=channel_id,
+            vk_group_id=int(group_id),
+            vk_group_name=group_name
         )
-        logger.info(f"Сохранено: user={message.from_user.id}, группа={group_id}, канал={channel_id}")
-        await message.answer(
-            f"Подключено!\n\n"
-            f"VK: `{group_id}`\n"
-            f"TG: `{channel_id}`\n\n"
-            "Репост с фото/видео начнётся автоматически.",
-            parse_mode="Markdown"
-        )
+
+        if success:
+            await message.answer(
+                f"Подключено!\n\n"
+                f"Канал: `{channel_id}`\n"
+                f"Группа ВК: `{group_id}` ({group_name})\n\n"
+                f"Репосты запущены автоматически!",
+                parse_mode="Markdown"
+            )
+            logger.info(f"УСПЕШНО: user={user_id} | {channel_id} → {group_id}")
+        else:
+            await message.answer("Такая связка уже существует — ничего не добавлено.")
+
     except Exception as e:
-        logger.error(f"Ошибка: {e}")
-        await message.answer("Ошибка сохранения. Попробуй позже.")
+        logger.error(f"Ошибка финализации: {e}")
+        await message.answer("Произошла ошибка. Попробуй позже.")
 
     await state.clear()
